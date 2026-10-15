@@ -13,7 +13,7 @@ const STOPWORDS = new Set(
     "which who will with would you your about before after send prepare make get tomorrow today").split(" "),
 );
 
-const NOT_CONTEXT = ["User", "Agent", "Action", "Approval", "Rule", "Request"];
+const NOT_CONTEXT = ["User", "Agent", "Action", "Approval", "Rule", "Request", "Plan", "Step", "Suggestion"];
 
 export type ContextNode = { id: string; label: string; name: string; props: Record<string, unknown> };
 export type ContextEdge = { from: string; rel: string; to: string };
@@ -26,6 +26,9 @@ export type Context = {
   cypher: string[];
 };
 
+// "Go through my inbox" names nobody: requests about mail start from the latest inbound messages.
+const INBOX = /\b(inbox|mail|mails|emails?|messages?)\b/i;
+
 export function searchTerms(request: string) {
   const words = request.toLowerCase().replace(/'s\b/g, "").match(/[a-z0-9]+/g) ?? [];
   return [...new Set(words.filter((w) => w.length >= 3 && !STOPWORDS.has(w)))];
@@ -37,6 +40,10 @@ WITH node, score WHERE none(l IN labels(node) WHERE l IN $exclude)
 RETURN node.id AS id, [l IN labels(node) WHERE l <> 'Entity'][0] AS label,
        coalesce(node.name, node.title, node.subject, node.what) AS name, score
 ORDER BY score DESC LIMIT $k`,
+
+  recentMail: `MATCH (m:Message {direction: 'inbound'})
+RETURN m.id AS id, 'Message' AS label, m.subject AS name, 0 AS score
+ORDER BY m.ts DESC LIMIT 5`,
 
   people: `CALL db.idx.fulltext.queryNodes('Entity', $q) YIELD node, score
 WITH node, score WHERE node:Person
@@ -59,20 +66,22 @@ RETURN u.name AS name, u.timezone AS timezone, collect({key: p.key, value: p.val
 
 export async function retrieve(g: Graph, request: string, k = 6): Promise<Context> {
   const terms = searchTerms(request);
-  const cypher = [Q.entry, Q.people, Q.expand, Q.nodes, Q.user];
+  const cypher = [Q.entry, Q.people, Q.recentMail, Q.expand, Q.nodes, Q.user];
 
   const userRow = (await g.roQuery<NonNullable<Context["user"]>>(Q.user)).data?.[0];
   const user = userRow ? { ...userRow, preferences: userRow.preferences.filter((p) => p.key) } : null;
 
-  if (!terms.length) return { terms, entryPoints: [], nodes: [], edges: [], user, cypher };
+  const mail = INBOX.test(request) ? (await g.roQuery<Context["entryPoints"][number]>(Q.recentMail)).data ?? [] : [];
+  if (!terms.length && !mail.length) return { terms, entryPoints: [], nodes: [], edges: [], user, cypher };
 
   // Each term matches as itself or as a prefix ("pric" finds "pricing"), OR'd together.
   const q = terms.map((t) => `${t}|${t}*`).join("|");
-  const top = (await g.roQuery<Context["entryPoints"][number]>(Q.entry, { params: { q, k, exclude: NOT_CONTEXT } })).data ?? [];
+  const top = terms.length ? (await g.roQuery<Context["entryPoints"][number]>(Q.entry, { params: { q, k, exclude: NOT_CONTEXT } })).data ?? [] : [];
   // Errands are about people: always keep the best-matching people as entry points, even when
   // documents and tasks that share a word ("Atlas") outscore them.
-  const people = (await g.roQuery<Context["entryPoints"][number]>(Q.people, { params: { q } })).data ?? [];
-  const entryPoints = [...top, ...people.filter((p) => !top.some((t) => t.id === p.id))];
+  const people = terms.length ? (await g.roQuery<Context["entryPoints"][number]>(Q.people, { params: { q } })).data ?? [] : [];
+  const entryPoints: Context["entryPoints"] = [];
+  for (const e of [...top, ...people, ...mail]) if (!entryPoints.some((x) => x.id === e.id)) entryPoints.push(e);
   if (!entryPoints.length) return { terms, entryPoints, nodes: [], edges: [], user, cypher };
 
   const ids = entryPoints.map((e) => e.id);

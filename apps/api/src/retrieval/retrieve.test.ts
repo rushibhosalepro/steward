@@ -72,6 +72,16 @@ describe("people are never crowded out", () => {
   });
 });
 
+describe("requests about the inbox", () => {
+  test("'go through my inbox' starts from the latest inbound mail, senders included", async () => {
+    const ctx = await retrieve(graph, "Go through my inbox and do whatever people asked for");
+    const ids = ctx.entryPoints.map((e) => e.id);
+    expect(ids).toContain("msg:priya-1");
+    expect(ids).toContain("msg:alex-1");
+    expect(ctx.edges.some((e) => e.from === "msg:alex-1" && e.rel === "FROM" && e.to === "p:alex")).toBe(true);
+  });
+});
+
 describe("edge cases", () => {
   test("stemming: 'price' finds the 'pricing' sheet", async () => {
     const ctx = await retrieve(graph, "what's the latest on the price sheet");

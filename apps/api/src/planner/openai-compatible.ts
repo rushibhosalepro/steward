@@ -27,7 +27,7 @@ export const PROVIDERS: Record<string, (env: Env) => ProviderConfig | null> = {
   } : null,
   groq: (env) => env.GROQ_API_KEY ? {
     name: "groq", baseUrl: "https://api.groq.com/openai/v1", apiKey: env.GROQ_API_KEY,
-    model: env.STEWARD_MODEL_GROQ ?? "llama-3.3-70b-versatile", jsonMode: true,
+    model: env.STEWARD_MODEL_GROQ ?? "openai/gpt-oss-120b", jsonMode: true,
   } : null,
   openrouter: (env) => env.OPENROUTER_API_KEY ? {
     name: "openrouter", baseUrl: "https://openrouter.ai/api/v1", apiKey: env.OPENROUTER_API_KEY,
@@ -52,6 +52,19 @@ ${SCHEMA_TEXT}`;
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
+
+// Keep the provider's own message, drop account identifiers: this text ends up in the plan's
+// note, the graph and the UI.
+export function providerError(body: string) {
+  let message = body;
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string } | string };
+    message = typeof parsed.error === "string" ? parsed.error : parsed.error?.message ?? body;
+  } catch {
+    // not JSON: use the raw text
+  }
+  return message.replace(/\b(org|organization|proj|project|user)[-_][A-Za-z0-9]+/gi, "[$1 id]").replace(/\s+/g, " ").trim().slice(0, 200);
+}
 
 export function parsePlan(text: string): { ok: true; plan: Plan } | { ok: false; error: string } {
   const json = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -88,7 +101,7 @@ export class OpenAICompatiblePlanner implements Planner {
       signal: AbortSignal.timeout(90_000),
     });
     if (res.status === 400 && jsonMode) return this.complete(messages, false); // model without JSON mode
-    if (!res.ok) throw new Error(`${this.cfg.name} ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) throw new Error(`${this.cfg.name} ${res.status}: ${providerError(await res.text())}`);
     const body = (await res.json()) as { choices?: { message?: { content?: string | null } }[] };
     const content = body.choices?.[0]?.message?.content;
     if (!content) throw new Error(`${this.cfg.name} returned no content`);

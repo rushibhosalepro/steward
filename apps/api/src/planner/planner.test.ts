@@ -99,6 +99,15 @@ describe("planRequest: the full chain in the graph", () => {
   });
 });
 
+describe("bookkeeping never reaches the planner", () => {
+  test("after planning, Plan / Step / Suggestion nodes stay out of the context", async () => {
+    await planRequest(graph, "email Priya the Atlas update", new OfflinePlanner());
+    const ctx = await retrieve(graph, "email Priya the Atlas update");
+    const labels = new Set(ctx.nodes.map((n) => n.label));
+    for (const l of ["Plan", "Step", "Suggestion", "Request", "Action"]) expect(labels.has(l)).toBe(false);
+  });
+});
+
 describe("a hijacked planner still can't leak", () => {
   test("forwarding the pricing sheet to Alex is blocked, whatever the planner claims as provenance", async () => {
     const hijacked = new FixedPlanner({

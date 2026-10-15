@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Context } from "../retrieval/retrieve";
-import { OpenAICompatiblePlanner, PROVIDERS, parsePlan } from "./openai-compatible";
+import { OpenAICompatiblePlanner, PROVIDERS, parsePlan, providerError } from "./openai-compatible";
 import { availablePlanners, choosePlanner } from "./plan";
 
 const ctx: Context = { terms: [], entryPoints: [], nodes: [], edges: [], user: null, cypher: [] };
@@ -89,5 +89,14 @@ describe("provider registry", () => {
     const plan = await planner.plan("email priya", ctx, "");
     expect(plan.by).toBe("offline");
     expect(plan.note).toContain("ollama failed");
+  });
+});
+
+describe("provider errors", () => {
+  test("keep the message, drop account ids", () => {
+    const body = JSON.stringify({ error: { message: "Rate limit reached for model `x` in organization `org_01kxaw25k5fnqrpys06wjfr6kj` service tier `on_demand`" } });
+    const msg = providerError(body);
+    expect(msg).toContain("Rate limit reached");
+    expect(msg).not.toContain("org_01kxaw25k5fnqrpys06wjfr6kj");
   });
 });

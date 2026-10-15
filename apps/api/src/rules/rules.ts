@@ -6,6 +6,8 @@ import type { Graph } from "falkordb";
 // override a BLOCK: the Sentinel only consults them after every other check passes.
 
 export const APPROVALS_NEEDED = 3;
+// An accepted rule is a capability that lapses: 30 days, then the user is asked again.
+export const RULE_TTL = 30 * 24 * 3_600_000;
 
 export type RuleStatus = "proposed" | "active" | "declined" | "revoked";
 
@@ -62,7 +64,8 @@ export async function proposeRuleIfEarned(g: Graph, actionId: string) {
   await g.query(
     `MATCH (p:Person {email: $email})
      CREATE (r:Entity:Rule {id: $id, action_type: $type, status: 'proposed', active: false,
-                            description: $description, created_at: $ts})-[:SCOPED_TO]->(p)
+                            description: $description, created_at: $ts,
+                            max_sensitivity: 'internal'})-[:SCOPED_TO]->(p)
      WITH r UNWIND $ids AS apId MATCH (ap:Approval {id: apId}) CREATE (r)-[:LEARNED_FROM]->(ap)`,
     { params: { ...params, id, description, ts: Date.now(), ids } },
   );
@@ -73,9 +76,10 @@ export async function decideRule(g: Graph, id: string, decision: RuleDecision) {
   const t = TRANSITIONS[decision];
   const res = await g.query<{ id: string }>(
     `MATCH (r:Rule {id: $id}) WHERE r.status = $from
-     SET r.status = $to, r.active = $active, r.decided_at = $ts
+     SET r.status = $to, r.active = $active, r.decided_at = $ts,
+         r.expires_at = CASE WHEN $to = 'active' THEN $ts + $ttl ELSE r.expires_at END
      RETURN r.id AS id`,
-    { params: { id, from: t.from, to: t.to, active: t.active, ts: Date.now() } },
+    { params: { id, from: t.from, to: t.to, active: t.active, ts: Date.now(), ttl: RULE_TTL } },
   );
   if (res.data?.length) return { ok: true as const, status: t.to };
 

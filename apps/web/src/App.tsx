@@ -28,6 +28,7 @@ const CHECK_LABEL: Record<string, string> = {
   information_flow: "Information flow",
   content_flow: "What the text gives away",
   rule_of_two: "Rule of Two (untrusted + private + external)",
+  volume: "Volume (no bulk sends)",
   provenance: "Who asked for this",
   calendar: "Calendar",
   standing_rule: "Standing rule",

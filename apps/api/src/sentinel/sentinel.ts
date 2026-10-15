@@ -24,7 +24,7 @@ export type Status = "pass" | "ask" | "block" | "skip";
 export type Verdict = "ALLOW" | "ASK" | "BLOCK";
 
 export type CheckResult = {
-  check: "known_recipient" | "information_flow" | "content_flow" | "provenance" | "rule_of_two" | "calendar" | "standing_rule";
+  check: "known_recipient" | "information_flow" | "content_flow" | "provenance" | "rule_of_two" | "calendar" | "standing_rule" | "volume";
   status: Status;
   reason: string;
   evidence: string[];     // human-readable graph paths
@@ -75,7 +75,13 @@ MATCH (u:User) RETURN p.value AS value, u.timezone AS tz`,
 RETURN m.id AS id, m.title AS title`,
 
   rule: `MATCH (r:Rule {active: true, action_type: $type})-[:SCOPED_TO]->(p:Person {email: $email})
-RETURN r.id AS id, coalesce(r.description, r.id) AS description, p.name AS name`,
+WHERE coalesce(r.expires_at, 9000000000000000) > $now
+RETURN r.id AS id, coalesce(r.description, r.id) AS description, p.name AS name,
+       coalesce(r.max_sensitivity, 'internal') AS scope`,
+
+  outboundFromSource: `MATCH (a:Action)-[:DERIVED_FROM]->(:Entity {id: $src})
+WHERE a.type IN ['send_email', 'share_doc'] OR (a.type = 'create_event' AND a.to IS NOT NULL)
+RETURN count(a) AS c`,
 };
 
 async function knownRecipient(g: Graph, a: ProposedAction): Promise<CheckResult> {
@@ -269,10 +275,37 @@ async function standingRule(g: Graph, a: ProposedAction): Promise<CheckResult> {
   if (a.type === "create_event" && !a.to) return { ...base, status: "pass", reason: "an event with no invitee only touches your own calendar", evidence: [] };
   if (!a.to) return { ...base, status: "ask", reason: "no standing rule applies", evidence: [] };
 
-  const res = await g.roQuery<{ id: string; description: string; name: string }>(Q.rule, { params: { type: a.type, email: a.to } });
+  const res = await g.roQuery<{ id: string; description: string; name: string; scope: string }>(Q.rule, { params: { type: a.type, email: a.to, now: Date.now() } });
   const row = res.data?.[0];
-  if (!row) return { ...base, status: "ask", reason: `no standing rule for ${a.type} to ${a.to} yet`, evidence: [] };
-  return { ...base, status: "pass", reason: `your rule "${row.description}" allows it`, evidence: [`Rule "${row.description}" -SCOPED_TO-> ${row.name}`], refs: [row.id] };
+  if (!row) return { ...base, status: "ask", reason: `no standing rule for ${a.type} to ${a.to} yet (or it expired)`, evidence: [] };
+
+  // A rule is a scoped capability: it also bounds how sensitive the data it carries may be.
+  // Restricted data is never in scope, so it always needs a human (if the path allows it at all).
+  const facts = await factsIn(g, a);
+  const dataIds = [...new Set([...(a.docs ?? []), ...facts.map((f) => f.doc)])];
+  const data = dataIds.length ? (await g.roQuery<{ title: string; sensitivity: string }>(Q.sensitivity, { params: { ids: dataIds } })).data ?? [] : [];
+  const over = data.filter((d) => (RANK[d.sensitivity] ?? 2) > (RANK[row.scope] ?? 1));
+  const evidence = [`Rule "${row.description}" -SCOPED_TO-> ${row.name} {up to ${row.scope} data}`];
+  if (over.length) {
+    return { ...base, status: "ask", reason: `your rule "${row.description}" covers data up to ${row.scope}; this carries ${over.map((d) => `${d.title} (${d.sensitivity})`).join(", ")}`, evidence, refs: [row.id] };
+  }
+  return { ...base, status: "pass", reason: `your rule "${row.description}" allows it`, evidence, refs: [row.id] };
+}
+
+const RANK: Record<string, number> = { public: 0, internal: 1, restricted: 2 };
+const MAX_OUTBOUND_PER_REQUEST = 3;
+
+// Abuse limit: one request (or one inbound mail) can't fan out into a bulk send. From the
+// fourth outbound action derived from the same source, a human decides.
+async function volume(g: Graph, a: ProposedAction): Promise<CheckResult> {
+  const base = { check: "volume" as const, cypher: [Q.outboundFromSource] };
+  const external = OUTBOUND.includes(a.type) || (a.type === "create_event" && !!a.to);
+  if (!external || a.derivedFrom === "user") return { ...base, status: "skip", reason: "not part of a multi-action request", evidence: [] };
+  const n = (await g.roQuery<{ c: number }>(Q.outboundFromSource, { params: { src: a.derivedFrom } })).data?.[0]?.c ?? 0;
+  if (n >= MAX_OUTBOUND_PER_REQUEST) {
+    return { ...base, status: "ask", reason: `this request already produced ${n} outbound actions; more than ${MAX_OUTBOUND_PER_REQUEST} needs you`, evidence: [`${n} Actions -DERIVED_FROM-> the same source`], refs: [a.derivedFrom] };
+  }
+  return { ...base, status: "pass", reason: `${n + 1} of at most ${MAX_OUTBOUND_PER_REQUEST} outbound actions for this request`, evidence: [] };
 }
 
 // Email addresses are case-insensitive; the graph stores them lower-cased.
@@ -290,6 +323,7 @@ export async function check(g: Graph, action: ProposedAction): Promise<SentinelR
     await provenance(g, a),
     await calendar(g, a),
     await standingRule(g, a),
+    await volume(g, a),
   ];
 
   const blocked = checks.filter((c) => c.status === "block");

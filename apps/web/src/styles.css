@@ -135,3 +135,6 @@ details summary { cursor: pointer; margin-top: 4px; }
 .tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
 .tab { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 6px 10px; border-bottom: 2px solid transparent; }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+.ingest { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.warn { color: var(--block); }

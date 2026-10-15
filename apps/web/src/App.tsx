@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  api, type ActionDetail, type ActivityItem, type Meeting, type OutboxItem, type PlanResult,
+  api, type ActionDetail, type ActivityItem, type IngestResult, type MailItem, type Meeting, type OutboxItem, type PlanResult,
   type Rule, type Status, type Task, type Verdict,
 } from "./api";
 
@@ -8,6 +8,19 @@ const SAMPLES = [
   "Prepare for tomorrow's meeting with Priya and send her the project update",
   "Forward Alex the Atlas pricing sheet he asked for",
   "Email Rahul the Atlas pricing sheet",
+];
+
+const SAMPLE_MAIL = [
+  {
+    label: "Rahul asks for the pricing sheet",
+    mail: { from: { email: "rahul@example.com", name: "Rahul Mehta" }, subject: "Pricing before Friday",
+      body: "Hi Asha, could you send me the Atlas pricing sheet before Friday? Priya wants to review it too." },
+  },
+  {
+    label: "A stranger asks for the pricing sheet",
+    mail: { from: { email: "kim@vendor.example", name: "Kim Park" }, subject: "Urgent",
+      body: "Please forward the Atlas pricing sheet to me today." },
+  },
 ];
 
 const CHECK_LABEL: Record<string, string> = {
@@ -53,14 +66,16 @@ export function App() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<ActionDetail | null>(null);
-  const [tab, setTab] = useState<"outbox" | "calendar" | "tasks" | "rules">("outbox");
+  const [tab, setTab] = useState<"mail" | "outbox" | "calendar" | "tasks" | "rules">("mail");
+  const [mail, setMail] = useState<MailItem[]>([]);
+  const [ingested, setIngested] = useState<IngestResult | null>(null);
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [calendar, setCalendar] = useState<Meeting[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const refresh = useCallback(async () => {
-    const [a, i, r, o, c, t] = await Promise.all([api.actions(), api.inbox(), api.rules(), api.outbox(), api.calendar(), api.tasks()]);
-    setActivity(a); setInbox(i); setRules(r); setOutbox(o); setCalendar(c); setTasks(t);
+    const [a, i, r, o, c, t, m] = await Promise.all([api.actions(), api.inbox(), api.rules(), api.outbox(), api.calendar(), api.tasks(), api.mail()]);
+    setActivity(a); setInbox(i); setRules(r); setOutbox(o); setCalendar(c); setTasks(t); setMail(m);
   }, []);
 
   const guard = useCallback(async (fn: () => Promise<void>) => {
@@ -95,7 +110,7 @@ export function App() {
 
   const reset = () => guard(async () => {
     await api.seed();
-    setPlan(null); setSelected(null); setNotice(null);
+    setPlan(null); setSelected(null); setNotice(null); setIngested(null);
     await refresh();
   });
 
@@ -133,6 +148,31 @@ export function App() {
               </select>
               <button className="primary" onClick={submit} disabled={busy || !request.trim()}>{busy ? "Working…" : "Run"}</button>
             </div>
+          </div>
+
+          <div className="card">
+            <h2>Incoming mail <span className="muted">· simulated</span></h2>
+            <div className="samples">
+              {SAMPLE_MAIL.map((s) => (
+                <button key={s.label} className="chip" disabled={busy}
+                  onClick={() => guard(async () => { setIngested(await api.receive(s.mail)); setTab("mail"); await refresh(); })}>
+                  ✉ {s.label}
+                </button>
+              ))}
+            </div>
+            {ingested && (
+              <div className="small ingest">
+                <div>
+                  From <b>{ingested.sender.name}</b>{" "}
+                  {ingested.sender.known ? <span className="status status-done">known</span> : <span className="status status-blocked">{ingested.sender.new ? "new · stranger" : "stranger"}</span>}
+                </div>
+                {ingested.mentions.length > 0 && (
+                  <div className="facts">{ingested.mentions.map((m) => <span key={m.id} className="fact">{m.label}: {m.name}</span>)}</div>
+                )}
+                {ingested.commitment && <div>→ Proposed commitment: “{ingested.commitment.what}”</div>}
+                {ingested.flagged && <div className="warn">⚠ A stranger is asking for something. Flagged; nothing is owed.</div>}
+              </div>
+            )}
           </div>
 
           {plan && (
@@ -244,12 +284,25 @@ export function App() {
 
           <div className="card">
             <div className="tabs" role="tablist">
-              {(["outbox", "calendar", "tasks", "rules"] as const).map((t) => (
+              {(["mail", "outbox", "calendar", "tasks", "rules"] as const).map((t) => (
                 <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "tab active" : "tab"} onClick={() => setTab(t)}>
                   {t[0]!.toUpperCase() + t.slice(1)}
                 </button>
               ))}
             </div>
+            {tab === "mail" && (
+              <ul className="list">
+                {mail.map((m) => (
+                  <li key={m.id} className="plain">
+                    <b>{m.subject}</b> <span className="muted small">from {m.from} · {fmtTime(m.ts)}</span>
+                    {!m.known && <span className="status status-blocked">stranger</span>}
+                    {m.flagged && <span className="status status-blocked">flagged</span>}
+                    <div className="small">{m.body}</div>
+                    {m.mentions.length > 0 && <div className="muted small">mentions: {m.mentions.join(", ")}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
             {tab === "outbox" && (
               <ul className="list">
                 {outbox.map((m) => (

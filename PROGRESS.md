@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~14:00 IST, 14h into the 96h window.
+**Last updated:** Thu Oct 15, ~14:40 IST, 14.5h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -136,7 +136,7 @@ asking. The rule is deliberately narrow:
 ### What's not built yet
 
 A live run of the **Claude planner** (needs an API key; the offline planner covers the demo),
-**inbound mail ingest**, **Scout** suggestions with PageRank, the **evaluation** over ~60
+**inbound mail ingest**, **Scout** suggestions with PageRank (next: it turns proposed commitments and flagged mail into suggestions), the **evaluation** over ~60
 labelled scenarios, and **deployment**. See *Build order* below.
 
 ---
@@ -162,7 +162,9 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | eval | `4d9ae09` | **Sentinel evaluation** | 63 labelled scenarios, labels from the stated policy (not from the Sentinel's output): routine-allow 16, routine-ask 10, **32 negative controls** (leaks 12, injected requests 10, unknown recipients 5, calendar conflicts 5), hard 5. Plus a **learning replay**. `bun run eval` → `eval/RESULTS.md`. A test locks in 0 unsafe allows | **First run: 0/63 unsafe allowed, 23/23 should-BLOCK blocked, 61/63 exact.** Learning: prompts per round 3 → 3 → 3 → 0 → 0 → 0, then 0 unsafe on the learned graph |
 | fix | `442d67b` | **Two over-cautious misses the eval found** | Email addresses compared case-insensitively (H02 had BLOCKED Priya written in different case); an event with no invitee passes the rule check like a task (A14). Labels unchanged | 3 tests; eval now 63/63 exact, 0 unsafe |
 
-**Tests:** 77 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| 8 | *this commit* | **Inbound mail ingest** | `POST /users/:id/mail` takes a (simulated) mail. The **sender** resolves by email, case-insensitively; an unknown sender becomes a `Person` with no `KNOWS` edge, so stays a stranger to every check. **Mentions** are proposed by the full-text index and confirmed by a word check (people by first/last name, projects by name, documents by ≥2 distinctive title words, best match only, never a superseded version), so they link to existing nodes instead of duplicating them. A **request** ("could you send…", "please…") from a known contact becomes a *proposed* `Commitment` `TO` them, `ABOUT` what it mentions; from a stranger it only **flags** the mail. Deterministic, no LLM. UI: "Incoming mail" card with two samples + a Mail tab | 10 tests: known sender + case, mention resolution, proposed commitment, retrieval finds the new mail, new stranger has no KNOWS, flagged with no commitment, acting on it is BLOCKED, no duplicate person, no ask → no commitment, never resolves to the old version. Checked in the browser |
+
+**Tests:** 87 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -185,6 +187,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | `POST /users/:id/context` | GraphRAG: entry points, subgraph and the rendered text the Planner will get, for `{ request }` |
 | `POST /users/:id/requests` | **the front door**: `{ request, planner? }` → plan → Sentinel → run / inbox / blocked |
 | `GET /users/:id/actions` | activity feed: every action, newest first |
+| `POST /users/:id/mail` · `GET /users/:id/mail` | receive a simulated inbound mail (sender, mentions, request resolved into the graph) · list inbound mail |
 
 ### What the Sentinel decides on the demo world today
 
@@ -209,7 +212,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | # | Job (from `graph-model.md`) | Status |
 |---|---|---|
 | 1 | Per-user isolation (multigraph) | ✅ `graphFor(userId)` → `user_<id>` |
-| 2 | Ingest inbound mail, keep knowledge current | 🟨 outbound side done: sending updates `KNOWS`, `SHARED_WITH`, commitments. Inbound ingest not yet |
+| 2 | Ingest inbound mail, keep knowledge current | ✅ inbound: sender, mentions and requests resolved into existing nodes; outbound: sending updates `KNOWS`, `SHARED_WITH`, commitments. (Vector index for fuzzier entity resolution not added) |
 | 3 | GraphRAG retrieval for the Planner | ✅ full-text entry points + one multi-hop expansion query (vector index still to add) |
 | 4 | Conversation memory (Session / Turn) | ⬜ |
 | 5 | The plan as Plan / Step nodes | ✅ `Request → Plan → Step → Action`, `USED_CONTEXT`, `WROTE` |
@@ -234,7 +237,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | Planner (LLM) with graph retrieval | ✅ Claude + offline fallback; **Claude path not yet run live (no API key)** |
 | Executor + 3 sandboxed tools | ✅ |
 | Learning: approve → propose narrow rule → accept / revoke | ✅ |
-| Ingest of inbound mail | ⬜ |
+| Ingest of inbound mail | ✅ deterministic (full-text + word check) |
 | Scout + PageRank | ⬜ |
 | Community detection → Contexts | ⬜ |
 | Web UI: request box, approval inbox, "why" panel, suggestions | ✅ (suggestions panel waits for Scout) |
@@ -245,7 +248,6 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 ## Build order from here (one feature, one commit)
 
-8. **Ingest of inbound mail** (entity extraction + dedup via vector / full-text index)
 9. **Scout + PageRank** suggestions
 11. Community detection, shortest-path explanations, MCP (if time before the freeze)
 

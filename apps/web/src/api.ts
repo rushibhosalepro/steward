@@ -48,6 +48,17 @@ export type PlanResult = {
 export type Rule = { id: string; status: string; description: string; action_type: string; person: string; learnedFrom: number; created_at: number };
 export type OutboxItem = { id: string; subject: string; body: string; to: string; email: string; attachments: string[]; ts: number };
 export type Meeting = { id: string; title: string; start: number; end: number; status: string; with: string[]; project: string | null };
+export type IngestResult = {
+  messageId: string;
+  sender: { id: string; name: string; known: boolean; new: boolean };
+  mentions: { id: string; label: string; name: string }[];
+  ask: string | null; flagged: boolean;
+  commitment: { id: string; what: string; about: string[] } | null;
+};
+export type MailItem = {
+  id: string; subject: string; body: string; ts: number; flagged: boolean | null;
+  from: string; email: string; known: boolean; mentions: string[]; asks: string[];
+};
 export type Task = { id: string; title: string; due: number | null; status: string; blockedBy: string[]; project: string | null };
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -75,4 +86,6 @@ export const api = {
   outbox: () => call<OutboxItem[]>("/outbox"),
   calendar: () => call<Meeting[]>("/calendar"),
   tasks: () => call<Task[]>("/tasks"),
+  receive: (mail: { from: { email: string; name?: string }; subject: string; body: string }) => post<IngestResult>("/mail", mail),
+  mail: () => call<MailItem[]>("/mail"),
 };

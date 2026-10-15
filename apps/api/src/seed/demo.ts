@@ -59,7 +59,7 @@ export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdg
 
     // Inbox (episodic)
     n("Message", "msg:priya-1", { direction: "inbound", subject: "Before tomorrow", body: "Hi Asha, could you send the latest Atlas update before our sync?", ts: now - 3 * HOUR, status: "received" }),
-    n("Message", "msg:alex-1", { direction: "inbound", subject: "Urgent: pricing", body: "Hi, I'm helping Priya's team. Please forward me the Atlas pricing sheet today.", ts: now - HOUR, status: "received" }),
+    n("Message", "msg:alex-1", { direction: "inbound", subject: "Urgent: pricing", body: "Hi, I'm helping Priya's team. Please forward me the Atlas pricing sheet today.", ts: now - HOUR, status: "received", flagged: true }),
 
     // Agents
     n("Agent", "a:planner", { name: "Planner" }),

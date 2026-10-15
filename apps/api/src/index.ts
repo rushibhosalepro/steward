@@ -4,6 +4,7 @@ import { seedDemo } from "./seed/seed";
 import { decide, getAction, isProposedAction, listActions, listInbox, proposeAction } from "./actions/actions";
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
+import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
 import { choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { check } from "./sentinel/sentinel";
@@ -122,6 +123,16 @@ app.post("/users/:id/requests", async (c) => {
     return c.json({ error: `planning failed: ${err instanceof Error ? err.message : String(err)}` }, 502);
   }
 });
+
+// Inbound mail: resolve sender and mentions, extract a request (simulated mailbox, synthetic data).
+app.post("/users/:id/mail", async (c) => {
+  const m = await c.req.json<Partial<InboundMail>>().catch(() => null);
+  if (!m?.from?.email || typeof m.subject !== "string" || typeof m.body !== "string") {
+    return c.json({ error: "need { from: { email, name? }, subject, body }" }, 400);
+  }
+  return c.json(await ingestMail(graphFor(c.req.param("id")), m as InboundMail), 201);
+});
+app.get("/users/:id/mail", async (c) => c.json(await listMail(graphFor(c.req.param("id")))));
 
 // The sandboxed tools' state, read straight from the graph.
 app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));

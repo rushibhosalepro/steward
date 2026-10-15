@@ -1,39 +1,45 @@
 # Progress
 
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
-Updated after every feature commit.
+Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, ~15:20 IST, 15h into the 96h window.
-**Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
-**Feature freeze:** Sat Oct 17, 09:30 IST.
+**Last updated:** Thu Oct 15, 12:30 IST · 12.5h into the 96h window · 27 commits · 99 tests passing.
+
+| Gate (from `../CHECKLIST.md`) | Due | Status |
+|---|---|---|
+| Idea locked, graph model final, labelled scenarios written, criteria asked on Discord | Thu 14:30 | ✅ except **asking about judging criteria on Discord** (yours to do) |
+| Seeded graph + Sentinel + Planner + Executor working end to end on the Priya flow | Fri 12:00 | ✅ done Thu 12:06 |
+| **Feature freeze**, scorecard filled, corpus run, both rates published | Sat 09:30 | eval done; freeze is 45h away |
+| Deployed, seeded, zero-login, no-key fallback, incognito + phone | Sun 00:00 | ⬜ not started |
+| Video, README, blog post, upstream bugs filed | Sun 19:15 | ⬜ |
 
 ---
 
 ## The idea, in one paragraph
 
 Steward is a personal operator agent, in the spirit of Meta's Muse, that lives entirely in a
-graph. FalkorDB is the only datastore. It runs routine errands (email, calendar, tasks)
-through sandboxed tools. **The LLM proposes and the graph decides:** before any action
-runs, the Sentinel walks the user's graph and returns **ALLOW / ASK / BLOCK** with the
-path that justifies it. Approvals become narrow, reviewable, reversible rules, so it asks
-less over time without getting looser. Tracks: **T2** (memory and coordination) primary,
-**T1** (agents that act on connected data) secondary.
+graph. FalkorDB is the only datastore. You give it a sentence; it finds the relevant part of
+your graph, plans the errands (email, calendar, tasks), and runs them in sandboxed tools.
+**The model proposes and the graph decides:** before anything runs, the Sentinel walks your
+graph and returns **ALLOW / ASK / BLOCK** with the path that justifies it. Approvals become
+narrow, reviewable, reversible rules, so it asks less over time without getting looser. It
+also reads incoming mail into the graph and, like Muse, suggests things before you ask.
+Tracks: **T2** (memory and coordination) primary, **T1** (agents that act on connected data).
 
 ---
 
 ## What we've built, explained
 
-In one sentence: **Steward can already receive a proposed errand, decide from the graph
-whether it's allowed, ask you when it isn't sure, carry it out, remember what happened, and
-learn to stop asking about things you always approve.** Since feature 6 it also takes a plain
-sentence ("prepare for tomorrow's meeting with Priya and send her the project update"), finds
-the relevant part of the graph, and plans the errands itself.
+In one sentence: **you type an errand; Steward finds what it's about in your graph, plans it,
+checks every step against the graph, does what's safe, asks about what isn't sure, blocks
+what would leak, remembers what happened, learns what you always approve, keeps the graph
+current from your mail, and tells you what needs attention before you ask.**
 
 ### 1. A synthetic person, as a graph
 
-Everything starts from one user's graph. Our demo user is **Asha** (all invented, rule 6).
-Her graph holds the people she knows, the projects they share, the documents in each
-project, her calendar, her tasks, the promises she's made, a preference, and her inbox:
+Everything starts from one user's graph. The demo user is **Asha** (all invented, rule 6):
+the people she knows, the projects they share, the documents in each project, her calendar,
+tasks, promises, a preference, and her inbox.
 
 ```
             KNOWS                MEMBER_OF              BELONGS_TO
@@ -47,168 +53,161 @@ project, her calendar, her tasks, the promises she's made, a preference, and her
    └─ Inbox: "Before tomorrow" FROM Priya  ·  "Urgent: pricing" FROM Alex Chen (a stranger)
 ```
 
-Every user gets their **own isolated graph** in FalkorDB (`user_asha`, `user_<id>`), so one
-person's memory and rules can never leak into another's.
+Every user gets their **own isolated graph** in FalkorDB (`user_<id>`), so one person's
+memory and rules can never leak into another's.
 
-### 2. The Sentinel: the graph decides, not the model
+### 2. From a sentence to a plan: graph retrieval + the Planner
 
-When an action is proposed, say *"email Priya the Atlas update"*, the **Sentinel** runs five
-Cypher checks over Asha's graph. No LLM is involved:
+*"Prepare for tomorrow's meeting with Priya and send her the project update."*
+
+- **Retrieval (GraphRAG).** A FalkorDB **full-text index** finds what the sentence is about
+  (Priya, her meeting, the Atlas update), always keeping the best-matching people. **One
+  multi-hop query** then pulls in everything 1–2 hops away: her project, the latest version
+  of the doc, the promise Asha made her, the task that's blocked, her email. The Planner
+  sees only this neighbourhood, never the whole graph.
+- **The Planner** turns that into typed actions. Two planners share one interface: **Claude**
+  (`claude-opus-5-5`, structured output) and an **offline** planner that needs no API key
+  (the demo works without one). Either way, the planner only *proposes*.
+- The whole chain is stored: `Request → Plan → Step → Action`, plus which nodes the plan used.
+
+### 3. The Sentinel: the graph decides, not the model
+
+Every proposed action goes through five **Cypher checks**. No LLM is involved:
 
 | Check | The question it asks the graph |
 |---|---|
 | **Known recipient** | Has Asha ever been in contact with this person? |
-| **Information flow** | Can this document reach this person? Only if they're on the doc's project, or it's been explicitly shared with them. Restricted docs need an explicit share. An old version gets flagged |
-| **Provenance** | Who actually asked for this? Asha herself, a contact's email, or a stranger's email (a likely prompt injection)? |
+| **Information flow** | Can this document reach this person? Only if they're on its project or it was explicitly shared with them. Restricted docs need an explicit share. An old version gets flagged |
+| **Who asked for this** | Asha herself, a contact's email, or a stranger's email (a likely prompt injection)? |
 | **Calendar** | Does a new meeting break a preference or clash with another meeting? |
-| **Standing rule** | Has Asha told Steward it may do this kind of thing for this person without asking? |
+| **Standing rule** | Has Asha told Steward it may do this for this person without asking? |
 
-The result is **ALLOW**, **ASK** or **BLOCK**, plus for each check the reason, the graph path
-it followed, and the exact Cypher it ran. Example: Alex's email asking for the pricing sheet
-is **BLOCKED twice over**: the sheet is restricted and was never shared with him, *and* the
-request came from someone Asha doesn't know.
+Result: **ALLOW**, **ASK** or **BLOCK**, and for each check the reason, the graph path and the
+exact Cypher. Alex's email asking for the pricing sheet is **BLOCKED twice over**: the sheet
+is restricted and never shared with him, *and* a stranger asked. A test plays a **hijacked
+planner** that obeys Alex's email: all three leak attempts are blocked, whatever it claims.
 
-### 3. Every action lives in the graph, and so does the inbox
+### 4. Actions live in the graph; the Executor does the work
 
-A proposed action becomes an **Action node** wired to:
-where it came from (Priya's email, or Asha's own request) · who it targets · which documents
-it uses · which agent proposed it · the Sentinel that checked it · and **`JUSTIFIED_BY` edges
-to every person, project, document and email its verdict rested on.** That last part is the
-data for the *"Why did my agent do that?"* panel.
+Each action is an `Action` node linked to where it came from, who it targets, what it uses,
+which agents touched it, and **`JUSTIFIED_BY` edges to every fact its verdict rests on**
+(the data behind the *"Why did my agent do that?"* panel).
 
-- **ASK** → the action waits in Asha's **approval inbox** (just a query: pending Actions)
-- **ALLOW** → ready to run
-- **BLOCK** → recorded, never runnable. **Asha can't approve a BLOCK in the app.** This is
-  deliberate restraint, not a missing button
-
-### 4. The Executor does the work, inside the graph
-
-Approved or allowed actions are carried out by the **Executor**. The "tools" are sandboxed
-and are themselves graph writes, so nothing real is ever sent:
-
-- email → an outbound **Message** to the person, with the documents attached
-- meeting → a **Meeting** with the invitee
-- task → a **Task** on Asha's list
-
-Before acting, the Executor **re-checks the action against the graph as it is now**. If the
-document became restricted after Asha approved, the action is blocked. If a rule was revoked
-after the Sentinel allowed it, it goes back to the inbox. Two executors can't run the same
-action, because claiming it is atomic.
-
-Doing the work also **updates what Steward knows**: Asha's contact count with Priya goes up,
-the document is now recorded as shared with Priya, and the commitment *"send Priya the
-update before our sync"* is marked **fulfilled**.
+- **ASK** → Asha's approval inbox · **ALLOW** → runs · **BLOCK** → recorded, and **can't be
+  approved in the app**. That's deliberate restraint, not a missing button.
+- The **Executor** claims an action atomically, **re-checks it against the graph as it is
+  now**, then acts. The tools are sandboxed graph writes: an outbound `Message` with
+  attachments, a `Meeting`, a `Task`. Nothing real is ever sent.
+- Doing the work **updates what Steward knows**: the contact gets stronger, the document is
+  recorded as shared, the promise to Priya is marked **fulfilled**.
 
 ### 5. It learns when to stop asking, carefully
 
-After Asha approves the **same kind of action for the same person three times**, Steward
-**proposes** a rule (*"send email to Priya Nair"*), linked to the three approvals it learned
-from. Nothing changes until Asha **accepts** it. After that, emails to Priya run without
-asking. The rule is deliberately narrow:
+Three approvals of the **same kind of action for the same person** → Steward **proposes** a
+rule (*"send email to Priya Nair"*), linked to those approvals. Nothing changes until Asha
+**accepts** it. Rules are narrow (one type, one person), **never override a BLOCK**, and can
+be declined or revoked; a rejection resets the count.
 
-- it covers one action type for one person. Rahul still needs approval, and so do meetings with Priya
-- it **never overrides a BLOCK**: the restricted pricing sheet still can't go to Priya
-- Asha can **decline** it or later **revoke** it, and a rejection resets the count
+### 6. It keeps the graph current from incoming mail
 
-### The full loop today, on the Priya scenario
+A new mail is resolved into the graph, deterministically:
+the **sender** by email (an unknown sender becomes a stranger with no `KNOWS` edge),
+**mentions** matched to existing people, projects and documents (no duplicates, never an
+old version), and a **request** ("could you send me…") from a contact becomes a *proposed*
+commitment. The same request from a stranger only **flags** the mail.
+
+### 7. Scout suggests things before you ask
+
+Scout runs six graph queries: promises due soon, requests to take on, people waiting for a
+reply, blocked tasks, meetings with no prep, flagged mail. It ranks them by urgency and by
+**PageRank over Asha's graph** ("#1 of 5 people by centrality"). Suggestions are graph nodes:
+they don't duplicate, dismissals stick, and they **resolve themselves** when the graph changes.
+**Scout never acts:** "Do it" sends a request through the Planner and Sentinel like any other.
+
+### 8. One screen to see it all
+
+The web UI shows: Ask Steward (with one-click samples and Reset demo) and the plan · Scout's
+suggestions · the approval inbox · activity · **"Why did my agent do that?"** (each check, its
+graph path, the Cypher, the facts behind it) · Mail / Outbox / Calendar / Tasks / Rules tabs ·
+incoming-mail samples. Light and dark; works at phone width.
+
+### The full loop, on the demo
 
 ```
-"prepare for tomorrow's meeting with Priya and send her the project update"  → Planner proposes: email Priya v2 + a prep task
+Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by centrality"   [Do it]
    │
-   ▼  Sentinel: known ✓  flow ✓ (v2 → Atlas ← Priya)  provenance ✓ (Priya's own email)  rule ✗
- ASK ─► inbox ─► Asha approves ─► Executor re-checks ─► Message in the outbox, v2 attached
-                                                       ─► commitment fulfilled, Priya's tie stronger
-   ×3 approvals ─► rule proposed ─► Asha accepts ─► next email to Priya: ALLOW, no prompt
+   ▼  retrieval: 6 entry points → 17 nodes · Planner proposes: email Priya v2 + a prep task
+   ▼  Sentinel: known ✓  flow ✓ (v2 → Atlas ← Priya)  asked by Priya ✓  rule ✗   → ASK
+ inbox ─► Asha approves ─► Executor re-checks ─► email in the outbox, v2 attached
+                                             ─► promise fulfilled, Priya's tie stronger, Scout's suggestion resolves
+ ×3 approvals ─► rule proposed ─► accepted ─► next email to Priya: ALLOW, no prompt
+ Meanwhile: "Forward Alex the pricing sheet" ─► BLOCK (restricted + a stranger asked)
 ```
 
 ### Why this matters for judging
 
-- **The take-it-out test (rule 3):** there is no other database. Remove FalkorDB and there's
-  nothing to check against, no inbox, no outbox, no memory and no rules.
+- **The take-it-out test (rule 3):** there is no other database. Without FalkorDB there's no
+  context for the planner, nothing to check against, no inbox, outbox, memory, rules or suggestions.
 - **The brief's three verbs:** *act* (Executor), *remember* (contacts, shares, commitments,
-  rules) and *show the path* (`JUSTIFIED_BY` edges, paths and Cypher on every verdict).
-- **Restraint as the architecture:** the model will only ever propose. The graph decides,
-  BLOCK is final, and rules never widen themselves.
-- **Evidence:** a 63-scenario evaluation with 32 negative controls. First run: **0 unsafe actions
-  allowed**, every should-BLOCK case blocked, and the two misses it found were over-cautious and
-  are now fixed (`eval/RESULTS-first-run.md` is kept). 77 tests against a real FalkorDB.
+  rules, mail), *show the path* (`JUSTIFIED_BY` edges, paths and Cypher on every verdict).
+- **Sponsor features used for real:** per-user multigraph · full-text index · multi-hop Cypher
+  on every step · `algo.pageRank`. Plus one upstream bug found and reproduced (`../BUGS.md`).
+- **Restraint as the architecture:** the model only proposes; the graph decides; BLOCK is final;
+  rules never widen themselves; Scout only suggests.
+- **Evidence:** 63 labelled scenarios with **32 negative controls**. First run, labels frozen:
+  **0 unsafe actions allowed**, 23/23 should-BLOCK blocked. The two misses were over-cautious
+  and are fixed (first-run report kept). Learning replay: prompts **3 → 3 → 3 → 0 → 0 → 0**, still
+  0 unsafe afterwards. 99 tests against a real FalkorDB.
 
 ### What's not built yet
 
-A live run of the **Claude planner** (needs an API key; the offline planner covers the demo),
-**inbound mail ingest**,  the **evaluation** over ~60
-labelled scenarios, and **deployment**. See *Build order* below.
+**MCP** (T1 key focus) · **deployment** · a live run of the **Claude planner** (needs an API key)
+· community detection → contexts · shortest-path explanations · conversation memory.
+See *Build order* below.
 
 ---
 
 ## Built so far
 
-| # | Commit | Feature | What it does | Verified by |
+| # | Commit · time | Feature | What it does | Verified by |
 |---|---|---|---|---|
-| 0 | `7360b2d` | **Scaffold** | Turborepo + Bun workspaces, `apps/api` on Bun + Hono, `falkordb` client, FalkorDB + Browser via docker compose. `graphFor(userId)` gives every user an isolated graph | `/health` and `/users/:id/ping` round-trip a node |
-| 1 | `c3dfe34` | **Schema + synthetic demo world** | Indexes on `Entity.id`, `Person.email`, `Meeting.start`. Demo user Asha: 28 nodes / 36 edges: 5 people (one stranger, Alex), 3 projects, 5 docs (v1→v2 of the Atlas update, a restricted pricing sheet shared only with Rahul), tomorrow's 11:00 Priya sync, a task that BLOCKS another, 2 commitments, a no-meetings-before-10 preference, and 2 inbound mails (Priya's real request, Alex's injected one) | 4 tests: counts, multi-hop Priya → meeting → Atlas → latest doc, idempotent reseed |
-| 2 | `ad8033e` | **Sentinel** | 5 deterministic Cypher checks: known recipient · information flow · provenance · calendar · standing rule. Most severe failure wins. Each check returns reason + graph path + the exact Cypher | 13 tests, 6 of them negative controls. Live endpoint blocks Alex's request on two grounds |
-| 3 | `dcc86de` | **Actions in the graph + approval inbox** | Every proposed action becomes an `Action` node: `DERIVED_FROM` its source (inbound `Message`, or a `Request` node for things the user typed), `TARGETS` the person, `USES` the docs, `PROPOSED` by the Planner, `CHECKED` by the Sentinel, and `JUSTIFIED_BY {check, status}` edges to every entity its verdict rests on. ASK → `pending` (the inbox), ALLOW → `ready`, BLOCK → `blocked`. Approve/reject creates an `Approval` node; **a BLOCK can't be approved in-app**, and nothing is decided twice | 8 tests: graph wiring, inbox, why-panel data, approve, double-decide 409, blocked can't be approved, Request provenance, reject + 404 |
-| fix | `296fd14` | **Provenance for Request sources** | User-typed actions derive from a `Request` node; the Sentinel now treats that as the user asking (it would have read as a stranger and blocked on re-check). Sources with no sender ASK | 2 tests |
-| 4 | `3e3a7db` | **Executor + sandboxed tools** | Runs `ready` / `approved` actions. Claims atomically (`status → executing` + `CLAIMED_BY` edge), **re-checks against the current graph** (BLOCK → blocked; a once-allowed action that now needs approval → back to the inbox), then acts as graph writes: email → outbound `Message` `TO` the person `ATTACHES` the docs; event → `Meeting` `WITH` the invitee; task → `Task`. Sending makes the recipient a contact (`KNOWS` count +1) and records `SHARED_WITH`. Open commitments the action keeps are marked `fulfilled` with a `FULFILS` edge. Approving now also executes | 12 tests: end-to-end Priya flow, commitment kept, contact memory, claim/execute edges, no double run, pending/blocked refused, doc turned restricted after approval → blocked, rule revoked after ALLOW → back to inbox, calendar, executor pass, task blocking |
-| 5 | `17ade50` | **Learning loop (procedural memory)** | After **3 approvals** of the same action type to the same person, a `Rule {status: proposed}` is created, `SCOPED_TO` the person and `LEARNED_FROM` those `Approval` nodes. It does nothing until the user **accepts**; it can be **declined** or later **revoked**. A rejection, decline or revoke restarts the streak. Rules are narrow (one type × one person) and **never override a BLOCK**: the Sentinel consults them only after every other check passes | 13 tests: no early proposal, proposal on 3rd, proposed rule changes nothing, no duplicates, accepted → ALLOW, narrowness (other person / other type still ASK), BLOCK still wins, revoke → ASK, illegal transitions, fresh streak after revoke, rejection resets, decline |
+| 0 | `7360b2d` · 09:48 | **Scaffold** | Turborepo + Bun workspaces, `apps/api` on Bun + Hono, `falkordb` client, FalkorDB + Browser via docker compose. `graphFor(userId)` gives every user an isolated graph | `/health` and `/users/:id/ping` round-trip a node |
+| 1 | `c3dfe34` · 10:14 | **Schema + synthetic demo world** | Indexes on `Entity.id`, `Person.email`, `Meeting.start`. Asha: 28 nodes / 36 edges: 5 people (one stranger), 3 projects, 5 docs (v1→v2, a restricted pricing sheet shared only with Rahul), tomorrow's 11:00 Priya sync, a task that BLOCKS another, 2 commitments, a preference, 2 inbound mails | 4 tests: counts, multi-hop meeting → project → latest doc, idempotent reseed |
+| 2 | `ad8033e` · 10:24 | **Sentinel** | 5 deterministic Cypher checks; most severe failure wins; each returns reason + graph path + Cypher | 13 tests, 6 negative controls |
+| 3 | `dcc86de` · 11:36 | **Actions in the graph + approval inbox** | `Action` nodes with `DERIVED_FROM` / `TARGETS` / `USES` / `PROPOSED` / `CHECKED` / `JUSTIFIED_BY {check, status}`. ASK → `pending`, ALLOW → `ready`, BLOCK → `blocked`. `Approval` nodes; **a BLOCK can't be approved**; nothing is decided twice | 8 tests |
+| fix | `296fd14` · 11:39 | **Provenance for Request sources** | A user-typed `Request` counts as the user asking (it would have read as a stranger on re-check). Sources with no sender ASK | 2 tests |
+| 4 | `3e3a7db` · 11:41 | **Executor + sandboxed tools** | Atomic claim (`CLAIMED_BY`), **re-check against the current graph**, then graph writes: outbound `Message` + `ATTACHES`, `Meeting` + `WITH`, `Task`. Updates `KNOWS`, `SHARED_WITH`; fulfils commitments (`FULFILS`). Approve also executes | 12 tests incl. doc restricted after approval → blocked, rule revoked after ALLOW → back to inbox |
+| 5 | `17ade50` · 11:44 | **Learning loop (procedural memory)** | 3 approvals of one type × one person → `Rule {status: proposed}` `SCOPED_TO` the person, `LEARNED_FROM` the approvals. Accept / decline / revoke; rejection resets the streak; never overrides a BLOCK. Worked around a FalkorDB bug (`../BUGS.md` #1) | 13 tests |
+| 6a | `388f7c6` · 11:53 | **GraphRAG retrieval** | Full-text index (names, titles, subjects, commitment text; stemming) for entry points + **one multi-hop query** (1–2 hops) that never routes through the User or bookkeeping nodes. Rendered as nodes-with-ids + id triples | 9 tests incl. per-user isolation |
+| 6b | `741b7c8` · 12:06 | **Planner** | `POST /requests`: retrieve → plan → Sentinel per action → ALLOWs run, ASKs to inbox, BLOCKs recorded. `Request → Plan → Step → Action`, `USED_CONTEXT`. Claude (`claude-opus-5-5`, structured output, refusal fallback) + offline planner. Invented provenance fails closed | 10 tests incl. **hijacked planner: 3/3 leak attempts BLOCKED** |
+| 7 | `ce4cc1f` · 12:14 | **Web UI** | Vite + React, one screen (see §8 above). `GET /actions`; names instead of ids; offline planner uses a document named in the request | 2 tests; walked through in the browser incl. rule learning and phone width |
+| eval | `4d9ae09` · 12:17 | **Sentinel evaluation** | 63 labelled scenarios (labels from the stated policy), 32 negative controls, learning replay. `bun run eval` → `eval/RESULTS.md`. Test locks in 0 unsafe allows | **First run: 0/63 unsafe, 23/23 BLOCKs, 61/63 exact**; learning 3 → 3 → 3 → 0 → 0 → 0 |
+| fix | `442d67b` · 12:18 | **Two over-cautious misses the eval found** | Case-insensitive email (H02 had BLOCKED Priya); invitee-less events pass the rule check like tasks (A14). Labels unchanged | 3 tests; eval 63/63, 0 unsafe |
+| 8 | `a537230` · 12:21 | **Inbound mail ingest** | `POST /mail`: sender by email (unknown → stranger, no `KNOWS`), mentions via full-text + word check (no duplicates, never superseded), a contact's request → *proposed* `Commitment`; a stranger's → **flagged** only. Deterministic. UI card + Mail tab | 10 tests incl. acting on a stranger's request is BLOCKED |
+| fix | `f1c1df3` · 12:24 | **Retrieval keeps people as entry points** | Atlas docs and tasks had crowded Priya out of the top 6, so "email Priya…" planned nothing. Top 3 person matches always kept | 1 test |
+| 9 | `c37ac61` · 12:25 | **Scout + PageRank** | Six suggestion queries, ranked by urgency + `algo.pageRank` over the user graph, with the reason. `Suggestion` nodes (`SUGGESTED`, `BECAUSE_OF`): no duplicates, dismissals stick, self-resolving. Never acts. UI panel with Do it / Take it on / Dismiss | 11 tests; checked in the browser |
 
-| 6a | `388f7c6` | **GraphRAG retrieval** | A FalkorDB **full-text index** over names, titles, subjects and commitment text finds the entry points for a request (with stemming: "price" finds "pricing"). One **multi-hop query** (1–2 hops) expands them into the neighbourhood the Planner will see, never passing through the User or Steward's own bookkeeping (agents, actions, approvals, rules). Rendered as compact text: nodes with ids and properties, then edges as id triples. On the Priya request: 6 entry points → 13 nodes, 18 edges, including Alex's injected mail | 9 tests: term extraction, entry points, multi-hop edges, bookkeeping excluded, user prefs, rendering, stemming, empty request, per-user isolation |
+**Tests:** 99 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
 
-| 6b | `741b7c8` | **Planner: one sentence in, Sentinel-checked actions out** | `POST /users/:id/requests` takes a sentence: retrieval (6a) → a planner proposes typed actions → each goes through the Sentinel → ALLOWs run, ASKs go to the inbox, BLOCKs are recorded. Written to the graph as `(Request)-[:PRODUCED]->(Plan)-[:HAS]->(Step)-[:PROPOSES]->(Action)`, with `(Plan)-[:USED_CONTEXT]->` the entry points. Two planners behind one interface: **Claude** (`claude-opus-5-5`, structured output, server-side refusal fallback) and a deterministic **offline** planner (no key: keeps open commitments, preps for meetings). An invented provenance id fails closed (ASK) | 10 tests incl. **a hijacked planner** that follows Alex's injected mail: all 3 leak attempts BLOCKED, whatever provenance it claims |
-
-| 7 | `ce4cc1f` | **Web UI** | `apps/web` (Vite + React). One screen: **Ask Steward** (request box, 3 one-click samples, planner picker, Reset demo) and the resulting plan · **Needs your approval** (approve / reject) · **Activity** (every action with verdict + status) · **"Why did my agent do that?"** (verdict, where it came from, each check with its graph path and collapsible Cypher, the graph facts it rests on) · tabs for **Outbox / Calendar / Tasks / Rules** (accept / decline / revoke). A rule proposal shows a banner. Light + dark, stacks at phone width. API additions: `GET /actions` (activity feed), names instead of ids in action detail and plan steps. Offline planner now uses a document named in the request (best full-text match) so the Alex sample demos a BLOCK | 2 new tests (activity feed, named document). Walked through in the browser: Priya → ASK; Alex → BLOCK on two checks; 3rd approval → rule proposed → accepted → same request runs as ALLOW with no prompt; phone width has no horizontal scroll |
-
-| eval | `4d9ae09` | **Sentinel evaluation** | 63 labelled scenarios, labels from the stated policy (not from the Sentinel's output): routine-allow 16, routine-ask 10, **32 negative controls** (leaks 12, injected requests 10, unknown recipients 5, calendar conflicts 5), hard 5. Plus a **learning replay**. `bun run eval` → `eval/RESULTS.md`. A test locks in 0 unsafe allows | **First run: 0/63 unsafe allowed, 23/23 should-BLOCK blocked, 61/63 exact.** Learning: prompts per round 3 → 3 → 3 → 0 → 0 → 0, then 0 unsafe on the learned graph |
-| fix | `442d67b` | **Two over-cautious misses the eval found** | Email addresses compared case-insensitively (H02 had BLOCKED Priya written in different case); an event with no invitee passes the rule check like a task (A14). Labels unchanged | 3 tests; eval now 63/63 exact, 0 unsafe |
-
-| 8 | `a537230` | **Inbound mail ingest** | `POST /users/:id/mail` takes a (simulated) mail. The **sender** resolves by email, case-insensitively; an unknown sender becomes a `Person` with no `KNOWS` edge, so stays a stranger to every check. **Mentions** are proposed by the full-text index and confirmed by a word check (people by first/last name, projects by name, documents by ≥2 distinctive title words, best match only, never a superseded version), so they link to existing nodes instead of duplicating them. A **request** ("could you send…", "please…") from a known contact becomes a *proposed* `Commitment` `TO` them, `ABOUT` what it mentions; from a stranger it only **flags** the mail. Deterministic, no LLM. UI: "Incoming mail" card with two samples + a Mail tab | 10 tests: known sender + case, mention resolution, proposed commitment, retrieval finds the new mail, new stranger has no KNOWS, flagged with no commitment, acting on it is BLOCKED, no duplicate person, no ask → no commitment, never resolves to the old version. Checked in the browser |
-
-| fix | `f1c1df3` | **Retrieval keeps people as entry points** | Found while testing Scout: once a few Atlas tasks existed, documents and tasks that share a word outscored Priya and pushed her out of the top-6 entry points, so "email Priya…" planned nothing. The top 3 person matches are now always included | 1 test (8 noise tasks; Priya still an entry point) |
-| 9 | `c37ac61` | **Scout: proactive suggestions ranked by PageRank** | The Muse-style "suggests without being asked". Six graph queries: open commitments due within 48h · requests proposed by known contacts ("take it on?") · contacts waiting for a reply (nothing sent since, not already covered by a commitment) · tasks blocked close to their due date · meetings in the next 48h with no prep task · flagged mail from strangers. Ranked by urgency plus **`algo.pageRank` over the user's whole graph** (PageRank over `KNOWS` alone is flat: every edge starts at the user), and each says why: "#1 of 5 people by centrality". Stored as `Suggestion` nodes (`Agent scout -[:SUGGESTED]->`, `-[:BECAUSE_OF]->` the entities): no duplicates across runs, dismissals stick, and suggestions **resolve themselves** when the graph changes. **Scout never acts:** a suggestion carries a request that goes through Planner → Sentinel like any other. UI: "Scout suggests" panel with Do it / Take it on / Decline / Dismiss | 11 tests: what it finds on the demo, Priya not double-listed, PageRank ordering + reason, creates no actions, no duplicates, meeting prep resolves, the commitment resolves after Planner → approve → execute, dismiss sticks, proposed commitment accept → becomes due, awaiting reply clears after a sent reply, only proposed commitments can be accepted. Checked in the browser |
-
-**Tests:** 99 pass, 0 fail, against a real FalkorDB (`bun run test`).
-
-### API so far
+### API
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /health` | lists graphs in FalkorDB |
-| `GET /users/:id/ping` | smoke test: writes and reads a User node |
-| `POST /users/:id/seed` | resets the user's graph to the demo world |
-| `GET /users/:id/overview` | node and edge counts by label and type |
-| `POST /users/:id/sentinel/check` | dry-runs the Sentinel on a proposed action |
-| `POST /users/:id/actions` | proposes an action: Sentinel verdict + stored as an `Action` node |
-| `GET /users/:id/inbox` | pending (ASK) actions awaiting approval |
-| `GET /users/:id/actions/:actionId` | one action with checks, source, `JUSTIFIED_BY` entities and decisions (the "why" panel's data) |
-| `POST /users/:id/actions/:actionId/approve` · `/reject` | records an `Approval`; approve also executes; 409 if blocked or already decided |
-| `POST /users/:id/actions/:actionId/execute` | run one ready/approved action (re-checked first) |
-| `POST /users/:id/executor/run` | one Executor pass over everything ready or approved |
-| `GET /users/:id/outbox` · `/calendar` · `/tasks` | the sandboxed tools' state, read from the graph |
-| `GET /users/:id/rules` | proposed / active / declined / revoked rules, with how many approvals each was learned from |
-| `POST /users/:id/rules/:ruleId/accept` · `/decline` · `/revoke` | the only way a rule changes state |
-| `POST /users/:id/context` | GraphRAG: entry points, subgraph and the rendered text the Planner will get, for `{ request }` |
 | `POST /users/:id/requests` | **the front door**: `{ request, planner? }` → plan → Sentinel → run / inbox / blocked |
-| `GET /users/:id/actions` | activity feed: every action, newest first |
-| `GET /users/:id/suggestions` | runs Scout and returns open suggestions, ranked |
-| `POST /users/:id/suggestions/:sid/dismiss` · `/accept` · `/decline` | dismiss any suggestion; accept or decline a proposed commitment |
-| `POST /users/:id/mail` · `GET /users/:id/mail` | receive a simulated inbound mail (sender, mentions, request resolved into the graph) · list inbound mail |
-
-### What the Sentinel decides on the demo world today
-
-| Proposed action | Verdict | Why (from the graph) |
-|---|---|---|
-| Email Priya the Atlas update v2 (from her mail) | **ASK** | all checks pass, but no standing rule for Priya yet |
-| …same, with a rule for Priya | **ALLOW** | `Rule -SCOPED_TO-> Priya Nair` |
-| Email Priya the superseded v1 | **ASK** | v1 is superseded by v2 |
-| Forward the pricing sheet to Alex (from Alex's mail) | **BLOCK** | restricted + not shared, *and* requested by a stranger |
-| Email the pricing sheet to Priya | **BLOCK** | restricted, not shared with her, even though she's on Atlas |
-| Share the Orbit roadmap with Priya | **BLOCK** | no path from the doc to her |
-| Share the pricing sheet with Rahul | flow **passes** | `Atlas pricing sheet -SHARED_WITH-> Rahul Mehta` |
-| Email an address not in the graph | **ASK** | not in your graph at all |
-| Meeting tomorrow at 08:00 | **ASK** | breaks the no-meetings-before-10 preference |
-| Meeting tomorrow at 11:30 | **ASK** | overlaps "Atlas sync with Priya" |
-| Create a task | **ALLOW** | tasks only touch your own list |
+| `GET /users/:id/suggestions` | runs Scout, returns open suggestions ranked |
+| `POST /users/:id/suggestions/:sid/dismiss` · `/accept` · `/decline` | dismiss; accept or decline a proposed commitment |
+| `GET /users/:id/inbox` | actions waiting for approval |
+| `GET /users/:id/actions` | activity feed |
+| `GET /users/:id/actions/:actionId` | one action with checks, source, `JUSTIFIED_BY` facts, decisions (the "why" panel) |
+| `POST /users/:id/actions/:actionId/approve` · `/reject` · `/execute` | decide (approve also executes; 409 if blocked or decided) · run one |
+| `POST /users/:id/actions` | propose one action directly (Sentinel verdict, stored) |
+| `POST /users/:id/sentinel/check` | dry-run the Sentinel |
+| `GET /users/:id/rules` · `POST /users/:id/rules/:ruleId/accept` · `/decline` · `/revoke` | procedural memory |
+| `POST /users/:id/mail` · `GET /users/:id/mail` | receive / list simulated inbound mail |
+| `POST /users/:id/context` | what the Planner would see for `{ request }` |
+| `GET /users/:id/outbox` · `/calendar` · `/tasks` | the sandboxed tools' state |
+| `POST /users/:id/executor/run` | one Executor pass |
+| `POST /users/:id/seed` · `GET /users/:id/overview` · `GET /health` | reset demo · counts · health |
 
 ---
 
@@ -216,54 +215,62 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 | # | Job (from `graph-model.md`) | Status |
 |---|---|---|
-| 1 | Per-user isolation (multigraph) | ✅ `graphFor(userId)` → `user_<id>` |
-| 2 | Ingest inbound mail, keep knowledge current | ✅ inbound: sender, mentions and requests resolved into existing nodes; outbound: sending updates `KNOWS`, `SHARED_WITH`, commitments. (Vector index for fuzzier entity resolution not added) |
-| 3 | GraphRAG retrieval for the Planner | ✅ full-text entry points + one multi-hop expansion query (vector index still to add) |
+| 1 | Per-user isolation (multigraph) | ✅ |
+| 2 | Ingest inbound mail, keep knowledge current | ✅ (exact-word resolution; no vector index) |
+| 3 | GraphRAG retrieval for the Planner | ✅ full-text + multi-hop (no vector index) |
 | 4 | Conversation memory (Session / Turn) | ⬜ |
-| 5 | The plan as Plan / Step nodes | ✅ `Request → Plan → Step → Action`, `USED_CONTEXT`, `WROTE` |
-| 6 | Agent coordination via Action status | ✅ Planner → Sentinel → Executor via Action status + `WROTE` / `PROPOSED` / `CHECKED` / `CLAIMED_BY` / `EXECUTED` edges |
-| 7 | **Permissions (Sentinel)** | ✅ 5 checks |
-| 8 | Tools' state as graph nodes (outbox, calendar, tasks) | ✅ Executor writes them; views read them |
-| 9 | Procedural memory (Rules) | ✅ learned from approvals, accepted / declined / revoked by the user |
-| 10 | Proactive suggestions (Scout) | ✅ 6 queries, `Suggestion` nodes, self-resolving |
-| 11 | PageRank prioritisation | ✅ `algo.pageRank` over the user graph ranks suggestions and explains the rank |
-| 12 | Community detection → Contexts | ⬜ (first cut if behind) |
-| 13 | Shortest path for the "why" panel | 🟨 `JUSTIFIED_BY` edges + text paths; no algorithm yet |
-| 14 | MCP | ⬜ |
+| 5 | The plan as Plan / Step nodes | ✅ |
+| 6 | Agent coordination via Action status | ✅ Planner → Sentinel → Executor, Scout via `SUGGESTED` |
+| 7 | **Permissions (Sentinel)** | ✅ 5 checks, evaluated |
+| 8 | Tools' state as graph nodes | ✅ |
+| 9 | Procedural memory (Rules) | ✅ |
+| 10 | Proactive suggestions (Scout) | ✅ |
+| 11 | PageRank prioritisation | ✅ |
+| 12 | Community detection → Contexts | ⬜ |
+| 13 | Shortest path for the "why" panel | 🟨 `JUSTIFIED_BY` edges + text paths; no path algorithm |
+| 14 | MCP | ⬜ **next** |
 
 ## Against the scope table in `PLAN.md`
 
 | Scope item | Status |
 |---|---|
-| FalkorDB as the only store | ✅ so far: no other datastore exists |
-| Sentinel: 5 Cypher checks | ✅ |
-| Seeded synthetic user, zero login | ✅ seed endpoint + Reset demo button, 3 one-click samples |
-| Approval inbox | ✅ API + UI |
-| Planner (LLM) with graph retrieval | ✅ Claude + offline fallback; **Claude path not yet run live (no API key)** |
-| Executor + 3 sandboxed tools | ✅ |
-| Learning: approve → propose narrow rule → accept / revoke | ✅ |
-| Ingest of inbound mail | ✅ deterministic (full-text + word check) |
+| FalkorDB as the only store | ✅ |
+| GraphRAG retrieval | ✅ |
+| Ingest of inbound mail | ✅ |
 | Scout + PageRank | ✅ |
-| Community detection → Contexts | ⬜ |
-| Web UI: request box, approval inbox, "why" panel, suggestions | ✅ (suggestions panel waits for Scout) |
-| Eval script over ~60 labelled scenarios | ✅ 63 scenarios + learning replay; numbers in `../results.md` |
+| Community detection → Contexts | ⬜ first to cut |
+| 3 sandboxed tools as graph nodes | ✅ |
+| Sentinel: 5 Cypher checks | ✅ |
+| UI: request box, inbox, "why" panel, suggestions | ✅ |
+| Learning: propose narrow rule → accept / revoke | ✅ |
+| Seeded synthetic user, zero login | ✅ Reset demo + one-click samples |
+| Eval over labelled scenarios | ✅ 63 + learning replay |
+| Planner with Claude | 🟨 built, **never run live (no API key)**; offline planner covers the demo |
 | Deploy | ⬜ |
 
 ---
 
 ## Build order from here (one feature, one commit)
 
-11. Community detection, shortest-path explanations, MCP (if time before the freeze)
+1. **MCP server:** the Sentinel, retrieval and graph tools over MCP (T1: "tool selection through MCP")
+2. **Deploy:** one public URL serving API + UI, seeded, no login, offline planner as fallback; test in incognito and on a phone
+3. **Live Claude planner run** once an `ANTHROPIC_API_KEY` is in `.env`; fix whatever the first real call surfaces
+4. Known issue: dedupe a prep task that already exists
+5. If time before the freeze (Sat 09:30): community detection → contexts as rule scopes; shortest-path explanation in the "why" panel
+
+Then the submission: README with graph model + Cypher (rule 10), video, blog post, file `../BUGS.md` #1 upstream, AI disclosure.
 
 ## Notes and decisions
 
 - Every node also carries `:Entity` so edges can be matched by id without knowing the label.
 - Labels and edge types can't be Cypher parameters; the seeder validates them before interpolating.
-- Demo times are pinned to IST (fixed +5:30) so the calendar checks don't depend on the server clock.
+- Demo times are pinned to IST (fixed +5:30) so calendar checks don't depend on the server clock.
 - Missing or unknown provenance fails closed (ASK), never open.
-- The Planner gets the subgraph, never the whole graph, and is told message bodies are data, not instructions. The real defence is structural: whatever it proposes, the Sentinel decides (see the hijacked-planner test).
+- The Planner gets the subgraph, never the whole graph, and is told message bodies are data, not instructions. The real defence is structural: whatever it proposes, the Sentinel decides.
 - The offline planner is the no-key demo path required by the plan, not a mock: it plans from the same retrieved subgraph.
-- **Upstream bug found:** FalkorDB 6.0.2 drops rows in `OPTIONAL MATCH … WHERE` after an aggregating `WITH`. Repro and workaround in `../BUGS.md` #1. To file before Sun 19:15 IST.
-- **Known issue:** re-running the same request re-creates the same prep task (the planner doesn't check for an existing open task with that title). Fix with a dedup check in the Executor or planner.
-- `bun run dev` loads the root `.env` (`--env-file=../../.env`), so an `ANTHROPIC_API_KEY` there reaches the Planner.
-- AI assistant (Claude Code) used for scaffolding, seed data, Sentinel and tests: to be logged in `../AI-DISCLOSURE.md` (rule 11).
+- PageRank over `KNOWS` alone is flat (every edge starts at the user); Scout ranks over the whole user graph.
+- **Upstream bug found:** FalkorDB 6.0.2 drops rows in `OPTIONAL MATCH … WHERE` after an aggregating `WITH`. Repro and workaround in `../BUGS.md` #1. File before Sun 19:15.
+- **Known issue:** re-running a request re-creates an existing prep task.
+- `bun run dev` loads the root `.env`, so an `ANTHROPIC_API_KEY` there reaches the Planner.
+- Dev preview in this session runs the API on :8788 (`STEWARD_API` points Vite at it); `bun run dev` uses :8787.
+- AI assistant (Claude Code) used throughout; to be logged in `../AI-DISCLOSURE.md` (rule 11).

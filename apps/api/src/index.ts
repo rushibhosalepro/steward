@@ -4,6 +4,7 @@ import { seedDemo } from "./seed/seed";
 import { decide, getAction, isProposedAction, listInbox, proposeAction } from "./actions/actions";
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
+import { choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { check } from "./sentinel/sentinel";
 
@@ -104,6 +105,19 @@ app.post("/users/:id/context", async (c) => {
   if (typeof body.request !== "string" || !body.request.trim()) return c.json({ error: "need { request }" }, 400);
   const ctx = await retrieve(graphFor(c.req.param("id")), body.request);
   return c.json({ ...ctx, rendered: renderContext(ctx) });
+});
+
+// The front door: a sentence in, a plan of Sentinel-checked actions out. ALLOWed actions run;
+// ASKs land in the inbox; BLOCKs are recorded. { planner?: "claude" | "offline" } overrides the default.
+app.post("/users/:id/requests", async (c) => {
+  const body = await c.req.json<{ request?: string; planner?: string }>().catch(() => ({ request: undefined, planner: undefined }));
+  if (typeof body.request !== "string" || !body.request.trim()) return c.json({ error: "need { request }" }, 400);
+  if (body.planner && !["claude", "offline"].includes(body.planner)) return c.json({ error: "planner must be claude or offline" }, 400);
+  try {
+    return c.json(await planRequest(graphFor(c.req.param("id")), body.request, choosePlanner(body.planner)), 201);
+  } catch (err) {
+    return c.json({ error: `planning failed: ${err instanceof Error ? err.message : String(err)}` }, 502);
+  }
 });
 
 // The sandboxed tools' state, read straight from the graph.

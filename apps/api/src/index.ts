@@ -3,6 +3,7 @@ import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
 import { decide, getAction, isProposedAction, listInbox, proposeAction } from "./actions/actions";
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
+import { decideRule, listRules } from "./rules/rules";
 import { check } from "./sentinel/sentinel";
 
 const app = new Hono();
@@ -85,6 +86,16 @@ app.post("/users/:id/actions/:actionId/execute", async (c) => {
 
 // One Executor pass over everything ready or approved.
 app.post("/users/:id/executor/run", async (c) => c.json(await runExecutor(graphFor(c.req.param("id")))));
+
+// Procedural memory: proposed, active, declined and revoked rules.
+app.get("/users/:id/rules", async (c) => c.json(await listRules(graphFor(c.req.param("id")))));
+
+for (const decision of ["accept", "decline", "revoke"] as const) {
+  app.post(`/users/:id/rules/:ruleId/${decision}`, async (c) => {
+    const r = await decideRule(graphFor(c.req.param("id")), c.req.param("ruleId"), decision);
+    return r.ok ? c.json(r) : c.json({ error: r.error }, r.code);
+  });
+}
 
 // The sandboxed tools' state, read straight from the graph.
 app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));

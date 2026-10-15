@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~11:30 IST, 11.5h into the 96h window.
+**Last updated:** Thu Oct 15, ~11:50 IST, 12h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -34,7 +34,9 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | fix | `296fd14` | **Provenance for Request sources** | User-typed actions derive from a `Request` node; the Sentinel now treats that as the user asking (it would have read as a stranger and blocked on re-check). Sources with no sender ASK | 2 tests |
 | 4 | `3e3a7db` | **Executor + sandboxed tools** | Runs `ready` / `approved` actions. Claims atomically (`status → executing` + `CLAIMED_BY` edge), **re-checks against the current graph** (BLOCK → blocked; a once-allowed action that now needs approval → back to the inbox), then acts as graph writes: email → outbound `Message` `TO` the person `ATTACHES` the docs; event → `Meeting` `WITH` the invitee; task → `Task`. Sending makes the recipient a contact (`KNOWS` count +1) and records `SHARED_WITH`. Open commitments the action keeps are marked `fulfilled` with a `FULFILS` edge. Approving now also executes | 12 tests: end-to-end Priya flow, commitment kept, contact memory, claim/execute edges, no double run, pending/blocked refused, doc turned restricted after approval → blocked, rule revoked after ALLOW → back to inbox, calendar, executor pass, task blocking |
 
-**Tests:** 39 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| 5 | *this commit* | **Learning loop (procedural memory)** | After **3 approvals** of the same action type to the same person, a `Rule {status: proposed}` is created, `SCOPED_TO` the person and `LEARNED_FROM` those `Approval` nodes. It does nothing until the user **accepts**; it can be **declined** or later **revoked**. A rejection, decline or revoke restarts the streak. Rules are narrow (one type × one person) and **never override a BLOCK**: the Sentinel consults them only after every other check passes | 13 tests: no early proposal, proposal on 3rd, proposed rule changes nothing, no duplicates, accepted → ALLOW, narrowness (other person / other type still ASK), BLOCK still wins, revoke → ASK, illegal transitions, fresh streak after revoke, rejection resets, decline |
+
+**Tests:** 52 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -52,6 +54,8 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | `POST /users/:id/actions/:actionId/execute` | run one ready/approved action (re-checked first) |
 | `POST /users/:id/executor/run` | one Executor pass over everything ready or approved |
 | `GET /users/:id/outbox` · `/calendar` · `/tasks` | the sandboxed tools' state, read from the graph |
+| `GET /users/:id/rules` | proposed / active / declined / revoked rules, with how many approvals each was learned from |
+| `POST /users/:id/rules/:ruleId/accept` · `/decline` · `/revoke` | the only way a rule changes state |
 
 ### What the Sentinel decides on the demo world today
 
@@ -83,7 +87,7 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | 6 | Agent coordination via Action status | ✅ Planner → Sentinel → Executor via Action status + `PROPOSED` / `CHECKED` / `CLAIMED_BY` / `EXECUTED` edges (Planner itself not built yet) |
 | 7 | **Permissions (Sentinel)** | ✅ 5 checks |
 | 8 | Tools' state as graph nodes (outbox, calendar, tasks) | ✅ Executor writes them; views read them |
-| 9 | Procedural memory (Rules) | 🟨 Sentinel reads rules; nothing creates them yet |
+| 9 | Procedural memory (Rules) | ✅ learned from approvals, accepted / declined / revoked by the user |
 | 10 | Proactive suggestions (Scout) | ⬜ |
 | 11 | PageRank prioritisation | ⬜ |
 | 12 | Community detection → Contexts | ⬜ (first cut if behind) |
@@ -100,7 +104,7 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | Approval inbox | ✅ API (no UI yet) |
 | Planner (LLM) with graph retrieval | ⬜ |
 | Executor + 3 sandboxed tools | ✅ |
-| Learning: approve → propose narrow rule → accept / revoke | ⬜ |
+| Learning: approve → propose narrow rule → accept / revoke | ✅ |
 | Ingest of inbound mail | ⬜ |
 | Scout + PageRank | ⬜ |
 | Community detection → Contexts | ⬜ |
@@ -112,7 +116,6 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 
 ## Build order from here (one feature, one commit)
 
-5. **Learning loop:** 3 approvals of the same action type × person → proposed `Rule` → accept / revoke
 6. **Planner (LLM) + GraphRAG retrieval:** request → subgraph → structured actions → Sentinel
 7. **Web UI:** request box, approval inbox, "why" panel
 8. **Ingest of inbound mail** (entity extraction + dedup via vector / full-text index)
@@ -126,4 +129,5 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 - Labels and edge types can't be Cypher parameters; the seeder validates them before interpolating.
 - Demo times are pinned to IST (fixed +5:30) so the calendar checks don't depend on the server clock.
 - Missing or unknown provenance fails closed (ASK), never open.
+- **Upstream bug found:** FalkorDB 6.0.2 drops rows in `OPTIONAL MATCH … WHERE` after an aggregating `WITH`. Repro and workaround in `../BUGS.md` #1. To file before Sun 19:15 IST.
 - AI assistant (Claude Code) used for scaffolding, seed data, Sentinel and tests: to be logged in `../AI-DISCLOSURE.md` (rule 11).

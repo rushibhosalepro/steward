@@ -1,4 +1,5 @@
 import type { Graph } from "falkordb";
+import { proposeRuleIfEarned } from "../rules/rules";
 import { check, type CheckResult, type ProposedAction, type Verdict } from "../sentinel/sentinel";
 
 // Every proposed action becomes an Action node, wired to where it came from, who it
@@ -118,7 +119,10 @@ export async function getAction(g: Graph, id: string) {
 }
 
 export type Decision = "approved" | "rejected";
-export type DecideResult = { ok: true; status: Decision } | { ok: false; code: 404 | 409; error: string };
+type ProposedRule = NonNullable<Awaited<ReturnType<typeof proposeRuleIfEarned>>>;
+export type DecideResult =
+  | { ok: true; status: Decision; proposedRule?: ProposedRule }
+  | { ok: false; code: 404 | 409; error: string };
 
 // Only pending (ASK) actions can be decided. A BLOCK is final: the user can't approve it in-app.
 export async function decide(g: Graph, id: string, decision: Decision, note?: string): Promise<DecideResult> {
@@ -130,7 +134,11 @@ export async function decide(g: Graph, id: string, decision: Decision, note?: st
      RETURN a.id AS id`,
     { params: { id, decision, note: note ?? "", ts, apId: `ap:${crypto.randomUUID()}` } },
   );
-  if (res.data?.length) return { ok: true, status: decision };
+  if (res.data?.length) {
+    // An approval may earn a proposed rule; it never activates one.
+    const proposedRule = decision === "approved" ? await proposeRuleIfEarned(g, id) : null;
+    return proposedRule ? { ok: true, status: decision, proposedRule } : { ok: true, status: decision };
+  }
 
   const existing = await g.roQuery<{ status: string }>("MATCH (a:Action {id: $id}) RETURN a.status AS status", { params: { id } });
   const current = existing.data?.[0]?.status;

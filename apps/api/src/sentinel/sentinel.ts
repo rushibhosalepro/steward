@@ -62,7 +62,7 @@ MATCH (u:User) RETURN p.value AS value, u.timezone AS tz`,
 RETURN m.id AS id, m.title AS title`,
 
   rule: `MATCH (r:Rule {active: true, action_type: $type})-[:SCOPED_TO]->(p:Person {email: $email})
-RETURN r.id AS id, p.name AS name`,
+RETURN r.id AS id, coalesce(r.description, r.id) AS description, p.name AS name`,
 };
 
 async function knownRecipient(g: Graph, a: ProposedAction): Promise<CheckResult> {
@@ -190,10 +190,10 @@ async function standingRule(g: Graph, a: ProposedAction): Promise<CheckResult> {
   if (a.type === "create_task") return { ...base, status: "pass", reason: "tasks only touch your own list", evidence: [] };
   if (!a.to) return { ...base, status: "ask", reason: "no standing rule applies", evidence: [] };
 
-  const res = await g.roQuery<{ id: string; name: string }>(Q.rule, { params: { type: a.type, email: a.to } });
+  const res = await g.roQuery<{ id: string; description: string; name: string }>(Q.rule, { params: { type: a.type, email: a.to } });
   const row = res.data?.[0];
   if (!row) return { ...base, status: "ask", reason: `no standing rule for ${a.type} to ${a.to} yet`, evidence: [] };
-  return { ...base, status: "pass", reason: `rule ${row.id} allows ${a.type} to ${row.name}`, evidence: [`Rule ${row.id} -SCOPED_TO-> ${row.name}`], refs: [row.id] };
+  return { ...base, status: "pass", reason: `your rule "${row.description}" allows it`, evidence: [`Rule "${row.description}" -SCOPED_TO-> ${row.name}`], refs: [row.id] };
 }
 
 export async function check(g: Graph, a: ProposedAction): Promise<SentinelResult> {

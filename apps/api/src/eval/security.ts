@@ -254,11 +254,12 @@ export const ATTACKS: Attack[] = [
       // The LLM planners, and the Google connector, which only the Executor calls after the Sentinel.
       const allowed = ["planner/openai-compatible.ts", "planner/claude.ts", "connectors/google.ts"];
       const offenders: string[] = [];
-      for await (const file of new Glob("**/*.ts").scan("src")) {
+      for await (const found of new Glob("**/*.ts").scan("src")) {
+        const file = found.replace(/\\/g, "/");  // Windows scans give eval\x.ts
         if (file.endsWith(".test.ts") || file.startsWith("eval/")) continue;
         const text = await Bun.file(`src/${file}`).text();
         const net = /\bfetch\(|from "node:(net|http|https|dgram)"|new WebSocket\(|Bun\.connect\(/.test(text);
-        if (net && !allowed.includes(file.replace(/\\/g, "/"))) offenders.push(file);
+        if (net && !allowed.includes(file)) offenders.push(file);
       }
       return { got: offenders.length ? `network in: ${offenders.join(", ")}` : "none outside the planner", sideEffect: "static check", pass: offenders.length === 0 };
     },

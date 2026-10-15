@@ -133,10 +133,20 @@ export function createMcpServer(userId: string, { guarded = true }: { guarded?: 
 
   server.registerTool("steward_check_action", {
     title: "Dry-run the Sentinel",
-    description: "Ask whether an action would be ALLOWed, need the user's approval (ASK) or be BLOCKed, with each graph check, its path and its Cypher. Stores nothing.",
+    description: "Dry run only: whether an action would be ALLOWed, need the user's approval (ASK) or be BLOCKed, with each graph check, its path and its Cypher. Stores and queues nothing; to do the errand, call steward_propose_action.",
     inputSchema: actionShape,
     annotations: READ,
-  }, async (args) => json(await check(g, await toProposed(g, args as ActionArgs))));
+  }, async (args) => {
+    // Agents read "ASK" as "I can't" and stopped without queueing anything (gpt-5.4-mini in the
+    // multi-model benchmark), so the result says what happens next.
+    const result = await check(g, await toProposed(g, args as ActionArgs));
+    const next = result.verdict === "BLOCK"
+      ? "This was only a dry run. It would be blocked: don't propose it."
+      : result.verdict === "ASK"
+        ? "This was only a dry run; nothing is queued. To do the errand, call steward_propose_action with the same arguments: it goes into the user's approval inbox."
+        : "This was only a dry run. To do the errand, call steward_propose_action with the same arguments.";
+    return json({ ...result, next });
+  });
 
   server.registerTool("steward_propose_action", {
     title: guarded ? "Propose an action" : "Do an action",

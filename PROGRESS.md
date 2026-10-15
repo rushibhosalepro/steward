@@ -351,3 +351,17 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | X3 | README: security section — what's enforced (8 checks, firewall, capabilities, audit, kill switch) and what's honestly out of scope (no network tools exist; no separate policy service) | limits |
 | X4 | ~~Public demo abuse: rate limits~~ ✅ per-IP limits + daily LLM budget, live | done |
 
+### Added Thu 14:20 — gaps against past winners (detail: `../WINNER-GAPS.md`)
+
+| # | What | Winner it comes from | Time |
+|---|---|---|---|
+| W1 | **Ablation: eval + attacks with vs without the graph** (rule 3 as a number) | Interlock: 13/14 with DataHub vs 6/14 without | 2h |
+| W2 | **File `../BUGS.md` #1 upstream** (you) | every Backblaze winner; DataHub winners' upstream skills | 30m |
+| W3 | **Community detection → contexts** (+ betweenness): more of the sponsor's named algorithms | Tether lost on "skipped the named surfaces" | 3h |
+| W4 | **Latency at scale**: "8 graph checks per action in N ms at 50k nodes" | the sponsor's own headline claim | 2h |
+| W5 | **Second demo user + conversation memory**; name the memory types | T2 key focus | 3h |
+| W6 | **AgentDojo workspace suite** adapted as a public benchmark (needs your OK to download) | kassi, Gauntlet: public benchmarks | 3h |
+| W7 | OWASP LLM Top-10 / MITRE ATLAS tags, a cited world-stakes number, a tagline with a competitor in it | Gauntlet, UiPath winners, Penetron | 1h |
+| W8 | Lead with usefulness; publish the escalation ratio over a simulated day | WebMCP: the one safety winner framed it as *giving* authority | in the video/write-up |
+| W9 | Film a real outside agent (Claude Desktop / Code) over MCP being stopped | Mandate filmed ChatGPT | 1h |
+

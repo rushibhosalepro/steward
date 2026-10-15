@@ -75,6 +75,8 @@ export function App() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [planners, setPlanners] = useState<string[]>(["offline"]);
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [audit, setAudit] = useState<{ ok: boolean; length: number; brokenAt?: number; reason?: string } | null>(null);
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [calendar, setCalendar] = useState<Meeting[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -84,6 +86,8 @@ export function App() {
       api.actions(), api.inbox(), api.rules(), api.outbox(), api.calendar(), api.tasks(), api.mail(), api.suggestions(),
     ]);
     setActivity(a); setInbox(i); setRules(r); setOutbox(o); setCalendar(c); setTasks(t); setMail(m); setSuggestions(sg);
+    const [p, au] = await Promise.all([api.paused(), api.audit()]);
+    setPaused(p.paused); setAudit(au);
   }, []);
 
   const guard = useCallback(async (fn: () => Promise<void>) => {
@@ -140,6 +144,17 @@ export function App() {
           <p className="tagline">It runs your errands. The graph decides what it's allowed to do.</p>
         </div>
         <div className="top-actions">
+          {audit && (
+            <span className={`status ${audit.ok ? "status-done" : "status-blocked"}`}
+              title={audit.ok ? "Every verdict, approval and execution is hash-chained; the chain verifies" : audit.reason}>
+              {audit.ok ? `Audit ✓ ${audit.length} events` : `Audit broken at #${audit.brokenAt}`}
+            </span>
+          )}
+          <button className={paused ? "primary" : "ghost"} disabled={busy}
+            title="Kill switch: while paused, nothing runs; checks and the inbox keep working"
+            onClick={() => guard(async () => { setPaused((await api.setPaused(!paused)).paused); await refresh(); })}>
+            {paused ? "▶ Resume Steward" : "⏸ Pause Steward"}
+          </button>
           <span className="who">Demo user: Asha Rao (synthetic)</span>
           {google?.configured && (google.connected
             ? <span className="status status-done" title="Allowed emails become Gmail drafts; events go on a 'Steward' calendar">Google: {google.account}</span>
@@ -148,6 +163,7 @@ export function App() {
         </div>
       </header>
 
+      {paused && <div className="banner banner-error">Steward is paused. Nothing will run until you resume; planning and checks still work.</div>}
       {error && <div className="banner banner-error" role="alert">{error}</div>}
       {notice && <div className="banner banner-info">{notice}</div>}
 

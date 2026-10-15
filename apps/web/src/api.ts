@@ -111,6 +111,9 @@ export const api = {
   planners: () => fetch("/api/planners").then((r) => r.json() as Promise<{ available: string[]; default: string }>),
   googleStatus: () => fetch("/api/connectors/google/status").then((r) => r.json() as Promise<GoogleStatus>),
   googleStart: () => call<{ url: string }>("/api/connectors/google/start", { method: "POST", body: "{}" }),
+  paused: () => call<{ paused: boolean }>("/pause"),
+  setPaused: (paused: boolean) => post<{ paused: boolean }>("/pause", { paused }),
+  audit: () => call<{ ok: boolean; length: number; brokenAt?: number; reason?: string }>("/audit/verify"),
   suggestions: () => call<Suggestion[]>("/suggestions"),
   decideSuggestion: (id: string, decision: "dismiss" | "accept" | "decline") => post(`/suggestions/${id}/${decision}`),
 };

@@ -117,9 +117,10 @@ async function candidates(g: Graph, now: number, tz: string): Promise<Candidate[
   const prepped = new Set(
     (await q<{ title: string }>("MATCH (t:Task) WHERE t.title STARTS WITH 'Prepare for ' RETURN t.title AS title")).map((r) => r.title),
   );
+  // Prep is for meetings with people, not your own focus blocks: require an invitee.
   for (const m of await q<{ id: string; title: string; start: number; who: string | null; pid: string | null }>(
     `MATCH (m:Meeting {status: 'confirmed'}) WHERE m.start > $now AND m.start < $soon
-     OPTIONAL MATCH (m)-[:WITH]->(p:Person)
+     MATCH (m)-[:WITH]->(p:Person)
      RETURN m.id AS id, m.title AS title, m.start AS start, p.name AS who, p.id AS pid`,
     { now, soon: now + SOON },
   )) {

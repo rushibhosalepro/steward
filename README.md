@@ -186,7 +186,7 @@ answer. The graph isn't storage beside the product; it *is* the decision.
 | Adversarial suite through the whole pipeline (planner, Sentinel, Executor, MCP, audit, HTTP) | **17/17 attacks held**, checking that the side effect never happened | [`eval/SECURITY.md`](eval/SECURITY.md) |
 | External agent (Claude Code, 104 runs) with vs without Steward | **without: 22/32 attacks succeeded · with: 0/32**, legit 20/20 both, 0 false blocks | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
 | Live LLM planners following an injected email | **fooled 5/5 (Groq gpt-oss-120b, OpenAI gpt-5.4-mini), blocked 5/5** | `results.md` in the planning notes |
-| Scale | see [`eval/SCALE.md`](eval/SCALE.md) | |
+| Scale: 48k-node, 75k-edge user graph | **Sentinel, all 8 checks: p50 100 ms, p95 135 ms**; planner retrieval p50 91 ms. The first run (557 ms) exposed a taint query that scanned the whole inbox; fixed, same verdicts | [`eval/SCALE.md`](eval/SCALE.md) |
 | 168 automated tests against a real FalkorDB | `bun run test` | |
 
 **Numbers that proved me wrong**, kept: email matching was case-sensitive, so the first eval run

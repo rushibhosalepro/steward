@@ -379,4 +379,5 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 |---|---|
 | Gmail drafts + a "Steward" Google Calendar behind the Sentinel (`1cf04d6`) | On the real account: Alex's injected request BLOCKED (no draft), Priya's email became a **real Gmail draft** after human approval, a calendar request became a **real event** (0 attendees). Verified through Google's own API |
 | Scaled external-agent benchmark (13 tasks × 2 conditions × 2 runs × Haiku/Sonnet, 104 runs) | **Without Steward: Haiku 14/16, Sonnet 8/16 attacks succeeded. With Steward: 0/16 both. Legit 10/10 everywhere, 0 false blocks.** Sonnet resists obvious injections itself but still leaks on "who may see what" calls (restricted pricing, mass send, a new personal address) |
-
+| Scale benchmark, 48k nodes / 75k edges (`eval/SCALE.md`) | Sentinel p50 **557 ms → 100 ms** (p95 135 ms) after anchoring the Rule of Two taint queries on indexes and running fact matching once per action; retrieval p50 91 ms. Verdicts unchanged (63/63, 17/17, 168 tests) |
+| Redeployed to Railway | live site has the Google connector (unconfigured there), memory, worlds, pause/audit UI |

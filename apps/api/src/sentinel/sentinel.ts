@@ -52,13 +52,17 @@ OPTIONAL MATCH (newer:Document)-[:SUPERSEDES]->(d)
 RETURN d.title AS title, d.sensitivity AS sensitivity, s.name AS sharedWith,
        pr.id AS projectId, pr.name AS project, m.name AS member, newer.title AS newer`,
 
-  // Untrusted inbound mail: from someone the user doesn't know, or flagged. What it mentions.
-  untrusted: `MATCH (m:Message {direction: 'inbound'})-[:FROM]->(s:Person)
+  // Inbound mail that could taint this action: sent by the recipient, or mentioning the data
+  // being sent. Both start from an index (Person.email, Entity.id), so the cost follows the
+  // action, not the size of the inbox. Untrusted = a sender the user doesn't know, or flagged.
+  untrustedFrom: `MATCH (s:Person {email: $to})<-[:FROM]-(m:Message {direction: 'inbound'})
 OPTIONAL MATCH (u:User)-[:KNOWS]->(s)
-WITH m, s, count(u) AS known
-WHERE known = 0 OR coalesce(m.flagged, false) = true
-OPTIONAL MATCH (m)-[:MENTIONS]->(e)
-RETURN m.id AS id, m.subject AS subject, s.name AS from, s.email AS email, collect(e.id) AS mentions`,
+RETURN m.id AS id, m.subject AS subject, s.name AS from, coalesce(m.flagged, false) AS flagged, count(u) AS known`,
+
+  untrustedAbout: `MATCH (d:Entity)<-[:MENTIONS]-(m:Message {direction: 'inbound'})-[:FROM]->(s:Person)
+WHERE d.id IN $ids
+OPTIONAL MATCH (u:User)-[:KNOWS]->(s)
+RETURN m.id AS id, m.subject AS subject, s.name AS from, coalesce(m.flagged, false) AS flagged, count(u) AS known`,
 
   sensitivity: `MATCH (d:Document) WHERE d.id IN $ids RETURN d.title AS title, d.sensitivity AS sensitivity`,
 
@@ -164,13 +168,21 @@ const outgoingText = (a: ProposedAction) =>
   [a.subject, a.body, a.type === "create_event" ? a.title : undefined].filter(Boolean).join("\n").toLowerCase();
 
 // The facts an action's outgoing text gives away, each with the marker that gave it away.
-async function factsIn(g: Graph, a: ProposedAction) {
+// Three checks ask; the answer is computed once per proposed action.
+type FoundFact = { id: string; text: string; markers: string[]; doc: string; title: string; marker: string };
+const factsCache = new WeakMap<ProposedAction, Promise<FoundFact[]>>();
+function factsIn(g: Graph, a: ProposedAction) {
+  let found = factsCache.get(a);
+  if (!found) factsCache.set(a, (found = scanFacts(g, a)));
+  return found;
+}
+async function scanFacts(g: Graph, a: ProposedAction): Promise<FoundFact[]> {
   const text = outgoingText(a);
   if (!a.to || !text.trim()) return [];
-  const facts = (await g.roQuery<{ id: string; text: string; markers: string[]; doc: string; title: string }>(Q.facts)).data ?? [];
+  const facts = (await g.roQuery<Omit<FoundFact, "marker">>(Q.facts)).data ?? [];
   return facts
     .map((f) => ({ ...f, marker: f.markers.find((m) => text.includes(m.toLowerCase())) }))
-    .filter((f): f is typeof f & { marker: string } => !!f.marker);
+    .filter((f): f is FoundFact => !!f.marker);
 }
 
 async function contentFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
@@ -194,7 +206,7 @@ async function contentFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
 // sent, or is the recipient that stranger? If A, B and C all hold, a human must approve: the
 // check answers ASK, which no standing rule can turn into ALLOW.
 async function ruleOfTwo(g: Graph, a: ProposedAction): Promise<CheckResult> {
-  const base = { check: "rule_of_two" as const, cypher: [Q.untrusted, Q.sensitivity, Q.facts] };
+  const base = { check: "rule_of_two" as const, cypher: [Q.untrustedFrom, Q.untrustedAbout, Q.sensitivity, Q.facts] };
   const external = OUTBOUND.includes(a.type) || (a.type === "create_event" && !!a.to);
   if (!external) return { ...base, status: "skip", reason: "nothing leaves your graph", evidence: [] };
 
@@ -205,8 +217,12 @@ async function ruleOfTwo(g: Graph, a: ProposedAction): Promise<CheckResult> {
         .filter((d) => d.sensitivity === "internal" || d.sensitivity === "restricted")
     : [];
 
-  const untrusted = (await g.roQuery<{ id: string; subject: string; from: string; email: string; mentions: string[] }>(Q.untrusted)).data ?? [];
-  const tainting = untrusted.filter((m) => m.email === a.to || m.mentions.some((id) => dataIds.includes(id)));
+  type Mail = { id: string; subject: string; from: string; flagged: boolean; known: number };
+  const candidates = [
+    ...((await g.roQuery<Mail>(Q.untrustedFrom, { params: { to: a.to ?? "" } })).data ?? []),
+    ...(dataIds.length ? (await g.roQuery<Mail>(Q.untrustedAbout, { params: { ids: dataIds } })).data ?? [] : []),
+  ];
+  const tainting = [...new Map(candidates.filter((m) => m.known === 0 || m.flagged).map((m) => [m.id, m])).values()];
 
   const legs = [
     tainting.length ? `A untrusted input: ${tainting.map((m) => `“${m.subject}” from ${m.from}`).join(", ")}` : null,

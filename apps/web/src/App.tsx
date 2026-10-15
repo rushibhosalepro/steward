@@ -70,6 +70,7 @@ export function App() {
   const [mail, setMail] = useState<MailItem[]>([]);
   const [ingested, setIngested] = useState<IngestResult | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [planners, setPlanners] = useState<string[]>(["offline"]);
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [calendar, setCalendar] = useState<Meeting[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -87,6 +88,7 @@ export function App() {
   }, []);
 
   useEffect(() => { void guard(refresh); }, [guard, refresh]);
+  useEffect(() => { void api.planners().then((p) => setPlanners(p.available)).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!selected) { setDetail(null); return; }
@@ -154,8 +156,7 @@ export function App() {
             <div className="row">
               <select value={planner} onChange={(e) => setPlanner(e.target.value)} aria-label="Planner">
                 <option value="">Planner: auto</option>
-                <option value="offline">Planner: offline</option>
-                <option value="claude">Planner: Claude</option>
+                {planners.map((p) => <option key={p} value={p}>Planner: {p}</option>)}
               </select>
               <button className="primary" onClick={submit} disabled={busy || !request.trim()}>{busy ? "Working…" : "Run"}</button>
             </div>
@@ -190,6 +191,7 @@ export function App() {
             <div className="card">
               <h2>Plan <span className="muted">· {plan.planner} planner</span></h2>
               <p className="muted small">{plan.summary}</p>
+              {plan.note && <p className="small warn">{plan.note}</p>}
               <p className="muted small">
                 Graph context: {plan.context.entryPoints.length} entry points → {plan.context.nodes} nodes, {plan.context.edges} edges
               </p>

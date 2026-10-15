@@ -5,7 +5,7 @@ import { decide, getAction, isProposedAction, listActions, listInbox, proposeAct
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
 import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
-import { choosePlanner, planRequest } from "./planner/plan";
+import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { decideSuggestion, runScout } from "./scout/scout";
 import { check } from "./sentinel/sentinel";
@@ -112,14 +112,22 @@ app.post("/users/:id/context", async (c) => {
   return c.json({ ...ctx, rendered: renderContext(ctx) });
 });
 
+// Which planners this server can run (offline always; LLM providers when their key is set).
+app.get("/planners", (c) => c.json({ available: availablePlanners(), default: process.env.STEWARD_PLANNER || "auto" }));
+
 // The front door: a sentence in, a plan of Sentinel-checked actions out. ALLOWed actions run;
 // ASKs land in the inbox; BLOCKs are recorded. { planner?: "claude" | "offline" } overrides the default.
 app.post("/users/:id/requests", async (c) => {
   const body = await c.req.json<{ request?: string; planner?: string }>().catch(() => ({ request: undefined, planner: undefined }));
   if (typeof body.request !== "string" || !body.request.trim()) return c.json({ error: "need { request }" }, 400);
-  if (body.planner && !["claude", "offline"].includes(body.planner)) return c.json({ error: "planner must be claude or offline" }, 400);
+  let planner;
   try {
-    return c.json(await planRequest(graphFor(c.req.param("id")), body.request, choosePlanner(body.planner)), 201);
+    planner = choosePlanner(body.planner);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+  try {
+    return c.json(await planRequest(graphFor(c.req.param("id")), body.request, planner), 201);
   } catch (err) {
     return c.json({ error: `planning failed: ${err instanceof Error ? err.message : String(err)}` }, 502);
   }

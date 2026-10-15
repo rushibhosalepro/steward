@@ -28,8 +28,12 @@ export const PlanSchema = z.object({
 export type PlannedAction = z.infer<typeof PlannedActionSchema>;
 export type Plan = z.infer<typeof PlanSchema>;
 
+// What a planner returns: the plan, plus which planner actually produced it and any note
+// (e.g. "groq failed, used the offline planner").
+export type PlanOutcome = Plan & { by?: string; note?: string };
+
 export interface Planner {
   name: string;
   // `rendered` is the text form of `ctx` (what an LLM reads); rule-based planners use `ctx`.
-  plan(request: string, ctx: Context, rendered: string): Promise<Plan>;
+  plan(request: string, ctx: Context, rendered: string): Promise<PlanOutcome>;
 }

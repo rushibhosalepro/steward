@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, 12:30 IST · 12.5h into the 96h window · 27 commits · 99 tests passing.
+**Last updated:** Thu Oct 15, 12:42 IST · 13h into the 96h window · 109 tests passing.
 
 | Gate (from `../CHECKLIST.md`) | Due | Status |
 |---|---|---|
@@ -66,8 +66,9 @@ memory and rules can never leak into another's.
   of the doc, the promise Asha made her, the task that's blocked, her email. The Planner
   sees only this neighbourhood, never the whole graph.
 - **The Planner** turns that into typed actions. Two planners share one interface: **Claude**
-  (`claude-opus-5-5`, structured output) and an **offline** planner that needs no API key
-  (the demo works without one). Either way, the planner only *proposes*.
+  (`claude-opus-5-5`, structured output), an OpenAI-compatible planner for **Grok, Gemini, Groq,
+  OpenRouter or a local Ollama model**, and an **offline** planner that needs no key. If an LLM
+  fails, Steward falls back to offline and says so. Either way, the planner only *proposes*.
 - The whole chain is stored: `Request → Plan → Step → Action`, plus which nodes the plan used.
 
 ### 3. The Sentinel: the graph decides, not the model
@@ -161,7 +162,7 @@ Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by cen
 
 ### What's not built yet
 
-**MCP** (T1 key focus) · **deployment** · a live run of the **Claude planner** (needs an API key)
+**MCP** (T1 key focus) · **deployment** · a live run of an **LLM planner** (Claude, Grok, Gemini, Groq, OpenRouter or Ollama are wired; needs one key)
 · community detection → contexts · shortest-path explanations · conversation memory.
 See *Build order* below.
 
@@ -187,13 +188,16 @@ See *Build order* below.
 | fix | `f1c1df3` · 12:24 | **Retrieval keeps people as entry points** | Atlas docs and tasks had crowded Priya out of the top 6, so "email Priya…" planned nothing. Top 3 person matches always kept | 1 test |
 | 9 | `c37ac61` · 12:25 | **Scout + PageRank** | Six suggestion queries, ranked by urgency + `algo.pageRank` over the user graph, with the reason. `Suggestion` nodes (`SUGGESTED`, `BECAUSE_OF`): no duplicates, dismissals stick, self-resolving. Never acts. UI panel with Do it / Take it on / Dismiss | 11 tests; checked in the browser |
 
-**Tests:** 99 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
+| 10 | *this commit* · 12:42 | **Multiple LLM providers for the Planner** | One OpenAI-compatible planner covers **xAI (Grok), Gemini, Groq, OpenRouter (free models), Ollama (local)**; Claude stays on its SDK. Same prompt and the same schema check for all; a malformed answer gets one repair turn; a model without JSON mode is retried without it. `STEWARD_PLANNER=auto` picks Claude if configured, else the first configured provider, else offline. **Any LLM failure falls back to the offline planner** and the plan says why, so a flaky free model can't break the demo. `GET /planners`; the UI picker lists only configured planners. Keys and model overrides in `.env.example` | 10 tests with a fake endpoint (request shape, repair turn, give-up, JSON-mode retry, 401) + registry + a real network failure → offline. Live: only `offline` available with no keys; unconfigured provider → 400 |
+
+**Tests:** 109 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
 
 ### API
 
 | Endpoint | Purpose |
 |---|---|
 | `POST /users/:id/requests` | **the front door**: `{ request, planner? }` → plan → Sentinel → run / inbox / blocked |
+| `GET /planners` | which planners this server can run (offline always; LLM providers whose key is set) |
 | `GET /users/:id/suggestions` | runs Scout, returns open suggestions ranked |
 | `POST /users/:id/suggestions/:sid/dismiss` · `/accept` · `/decline` | dismiss; accept or decline a proposed commitment |
 | `GET /users/:id/inbox` | actions waiting for approval |
@@ -245,7 +249,7 @@ See *Build order* below.
 | Learning: propose narrow rule → accept / revoke | ✅ |
 | Seeded synthetic user, zero login | ✅ Reset demo + one-click samples |
 | Eval over labelled scenarios | ✅ 63 + learning replay |
-| Planner with Claude | 🟨 built, **never run live (no API key)**; offline planner covers the demo |
+| Planner with an LLM | 🟨 Claude, Grok, Gemini, Groq, OpenRouter, Ollama built; **none run live yet (no keys)**; offline planner + automatic fallback cover the demo |
 | Deploy | ⬜ |
 
 ---
@@ -254,7 +258,7 @@ See *Build order* below.
 
 1. **MCP server:** the Sentinel, retrieval and graph tools over MCP (T1: "tool selection through MCP")
 2. **Deploy:** one public URL serving API + UI, seeded, no login, offline planner as fallback; test in incognito and on a phone
-3. **Live Claude planner run** once an `ANTHROPIC_API_KEY` is in `.env`; fix whatever the first real call surfaces
+3. **Live LLM planner run**: put any one key in `.env` (a free Groq, Gemini or OpenRouter key is enough), run the samples, fix what the first real call surfaces
 4. Known issue: dedupe a prep task that already exists
 5. If time before the freeze (Sat 09:30): community detection → contexts as rule scopes; shortest-path explanation in the "why" panel
 

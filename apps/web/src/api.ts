@@ -40,7 +40,7 @@ export type PlanStep = {
 };
 
 export type PlanResult = {
-  requestId: string; planId: string; planner: string; summary: string;
+  requestId: string; planId: string; planner: string; note: string | null; summary: string;
   context: { entryPoints: string[]; nodes: number; edges: number };
   steps: PlanStep[];
 };
@@ -89,6 +89,7 @@ export const api = {
   tasks: () => call<Task[]>("/tasks"),
   receive: (mail: { from: { email: string; name?: string }; subject: string; body: string }) => post<IngestResult>("/mail", mail),
   mail: () => call<MailItem[]>("/mail"),
+  planners: () => fetch("/api/planners").then((r) => r.json() as Promise<{ available: string[]; default: string }>),
   suggestions: () => call<Suggestion[]>("/suggestions"),
   decideSuggestion: (id: string, decision: "dismiss" | "accept" | "decline") => post(`/suggestions/${id}/${decision}`),
 };

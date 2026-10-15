@@ -132,8 +132,11 @@ describe("plumbing", () => {
     expect(p.end).toBeUndefined();
   });
 
-  test("choosePlanner honours an explicit choice", () => {
-    expect(choosePlanner("offline").name).toBe("offline");
-    expect(choosePlanner("claude").name).toBe("claude");
+  test("choosePlanner honours an explicit choice and refuses an unconfigured one", () => {
+    expect(choosePlanner("offline", {}).name).toBe("offline");
+    expect(choosePlanner("claude", { ANTHROPIC_API_KEY: "x" }).name).toBe("claude");
+    expect(() => choosePlanner("claude", {})).toThrow("not configured");
+    expect(() => choosePlanner("groq", {})).toThrow("not configured");
+    expect(() => choosePlanner("nope", {})).toThrow("unknown planner");
   });
 });

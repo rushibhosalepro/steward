@@ -1,3 +1,4 @@
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
@@ -5,6 +6,7 @@ import { decide, getAction, isProposedAction, listActions, listInbox, proposeAct
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
 import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
+import { createMcpServer } from "./mcp/server";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { decideSuggestion, runScout } from "./scout/scout";
@@ -153,6 +155,13 @@ for (const decision of ["dismiss", "accept", "decline"] as const) {
     return r.ok ? c.json(r) : c.json({ error: r.error }, 409);
   });
 }
+
+// MCP over Streamable HTTP, stateless: a fresh server + transport per request, scoped to the user.
+app.all("/users/:id/mcp", async (c) => {
+  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  await createMcpServer(c.req.param("id")).connect(transport);
+  return transport.handleRequest(c.req.raw);
+});
 
 // The sandboxed tools' state, read straight from the graph.
 app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));

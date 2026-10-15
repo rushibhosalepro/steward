@@ -28,3 +28,24 @@ curl -X POST localhost:8787/users/demo/seed   # load the synthetic demo world
 curl localhost:8787/users/demo/overview       # node and edge counts
 bun run test                                  # needs FalkorDB running
 ```
+
+## Use Steward from any MCP client
+
+Steward's graph is available as MCP tools: search, graph context, **shortest path between two
+entities**, **PageRank** ("who matters"), a Sentinel dry-run, propose an action, run a request,
+the approval inbox, explain an action, and Scout's suggestions. There is deliberately **no
+approve tool**: an agent can propose, only a human in Steward's UI can approve.
+
+**Over HTTP** (Streamable HTTP, stateless), per user:
+
+```
+http://localhost:8787/users/demo/mcp
+```
+
+**Over stdio**, e.g. Claude Code:
+
+```bash
+claude mcp add steward -- bun --cwd /path/to/steward/apps/api run mcp
+```
+
+`STEWARD_USER` picks whose graph the stdio server uses (default `demo`).

@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, 12:42 IST · 13h into the 96h window · 109 tests passing.
+**Last updated:** Thu Oct 15, 12:46 IST · 13.5h into the 96h window · 122 tests passing.
 
 | Gate (from `../CHECKLIST.md`) | Due | Status |
 |---|---|---|
@@ -125,7 +125,16 @@ reply, blocked tasks, meetings with no prep, flagged mail. It ranks them by urge
 they don't duplicate, dismissals stick, and they **resolve themselves** when the graph changes.
 **Scout never acts:** "Do it" sends a request through the Planner and Sentinel like any other.
 
-### 8. One screen to see it all
+### 8. Any agent can use it over MCP, but can't approve
+
+Steward's graph is also an **MCP server** (HTTP and stdio): search, graph context, shortest
+path between two things, PageRank, a Sentinel dry run, propose an action, run a request,
+the inbox, explain an action, Scout's suggestions. An outside agent (Claude Desktop, Claude
+Code, anything that speaks MCP) gets the same guarantees as Steward's own planner: everything
+it proposes goes through the Sentinel, and there is **no approve tool**, so only a human can
+let an ASK through and nothing can let a BLOCK through.
+
+### 9. One screen to see it all
 
 The web UI shows: Ask Steward (with one-click samples and Reset demo) and the plan · Scout's
 suggestions · the approval inbox · activity · **"Why did my agent do that?"** (each check, its
@@ -152,7 +161,7 @@ Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by cen
 - **The brief's three verbs:** *act* (Executor), *remember* (contacts, shares, commitments,
   rules, mail), *show the path* (`JUSTIFIED_BY` edges, paths and Cypher on every verdict).
 - **Sponsor features used for real:** per-user multigraph · full-text index · multi-hop Cypher
-  on every step · `algo.pageRank`. Plus one upstream bug found and reproduced (`../BUGS.md`).
+  on every step · `algo.pageRank` · shortest paths · **MCP** (10 tools, no approve tool by design). Plus one upstream bug found and reproduced (`../BUGS.md`).
 - **Restraint as the architecture:** the model only proposes; the graph decides; BLOCK is final;
   rules never widen themselves; Scout only suggests.
 - **Evidence:** 63 labelled scenarios with **32 negative controls**. First run, labels frozen:
@@ -162,7 +171,7 @@ Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by cen
 
 ### What's not built yet
 
-**MCP** (T1 key focus) · **deployment** · a live run of an **LLM planner** (Claude, Grok, Gemini, Groq, OpenRouter or Ollama are wired; needs one key)
+**Deployment** · a live run of an **LLM planner** (Claude, Grok, Gemini, Groq, OpenRouter or Ollama are wired; needs one key)
 · community detection → contexts · shortest-path explanations · conversation memory.
 See *Build order* below.
 
@@ -190,13 +199,16 @@ See *Build order* below.
 
 | 10 | `e868f67` · 12:42 | **Multiple LLM providers for the Planner** | One OpenAI-compatible planner covers **xAI (Grok), Gemini, Groq, OpenRouter (free models), Ollama (local)**; Claude stays on its SDK. Same prompt and the same schema check for all; a malformed answer gets one repair turn; a model without JSON mode is retried without it. `STEWARD_PLANNER=auto` picks Claude if configured, else the first configured provider, else offline. **Any LLM failure falls back to the offline planner** and the plan says why, so a flaky free model can't break the demo. `GET /planners`; the UI picker lists only configured planners. Keys and model overrides in `.env.example` | 10 tests with a fake endpoint (request shape, repair turn, give-up, JSON-mode retry, 401) + registry + a real network failure → offline. Live: only `offline` available with no keys; unconfigured provider → 400 |
 
-**Tests:** 109 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
+| 11 | *this commit* · 12:46 | **MCP server** | Steward's graph as **10 MCP tools**: `steward_search` · `steward_get_context` (GraphRAG) · `steward_find_connection` (**shortest path**, not routed through the user; "no path" is meaningful) · `steward_who_matters` (**PageRank**) · `steward_check_action` (Sentinel dry run) · `steward_propose_action` (Sentinel decides; runs only on ALLOW) · `steward_run_request` (full pipeline) · `steward_list_inbox` · `steward_explain_action` · `steward_get_suggestions`. **No approve / reject / rule tools on purpose:** an agent over MCP can propose, only a human in the UI can approve. Read tools annotated read-only. Proposals attributed to an `MCP client` agent. Served over **Streamable HTTP** at `/users/:id/mcp` (stateless) and **stdio** (`bun run mcp`) | 13 tests through a real MCP client (in-memory transport): tool list has no approve tool, annotations, search, path found / no path, PageRank order, context, dry run stores nothing, injected request BLOCKED + attributed, ASK lands in inbox, task runs, run_request, suggestions. Live: HTTP initialize → 10 tools → a call; stdio initialize → a call |
+
+**Tests:** 122 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
 
 ### API
 
 | Endpoint | Purpose |
 |---|---|
 | `POST /users/:id/requests` | **the front door**: `{ request, planner? }` → plan → Sentinel → run / inbox / blocked |
+| `ALL /users/:id/mcp` | **MCP** (Streamable HTTP, stateless): 10 tools over the user's graph; no approve tool |
 | `GET /planners` | which planners this server can run (offline always; LLM providers whose key is set) |
 | `GET /users/:id/suggestions` | runs Scout, returns open suggestions ranked |
 | `POST /users/:id/suggestions/:sid/dismiss` · `/accept` · `/decline` | dismiss; accept or decline a proposed commitment |
@@ -231,8 +243,8 @@ See *Build order* below.
 | 10 | Proactive suggestions (Scout) | ✅ |
 | 11 | PageRank prioritisation | ✅ |
 | 12 | Community detection → Contexts | ⬜ |
-| 13 | Shortest path for the "why" panel | 🟨 `JUSTIFIED_BY` edges + text paths; no path algorithm |
-| 14 | MCP | ⬜ **next** |
+| 13 | Shortest path | 🟨 as an MCP tool (`steward_find_connection`); not yet drawn in the "why" panel |
+| 14 | MCP | ✅ 10 tools over HTTP + stdio; no approve tool by design |
 
 ## Against the scope table in `PLAN.md`
 
@@ -256,11 +268,10 @@ See *Build order* below.
 
 ## Build order from here (one feature, one commit)
 
-1. **MCP server:** the Sentinel, retrieval and graph tools over MCP (T1: "tool selection through MCP")
-2. **Deploy:** one public URL serving API + UI, seeded, no login, offline planner as fallback; test in incognito and on a phone
-3. **Live LLM planner run**: put any one key in `.env` (a free Groq, Gemini or OpenRouter key is enough), run the samples, fix what the first real call surfaces
-4. Known issue: dedupe a prep task that already exists
-5. If time before the freeze (Sat 09:30): community detection → contexts as rule scopes; shortest-path explanation in the "why" panel
+1. **Deploy:** one public URL serving API + UI, seeded, no login, offline planner as fallback; test in incognito and on a phone
+2. **Live LLM planner run**: put any one key in `.env` (a free Groq, Gemini or OpenRouter key is enough), run the samples, fix what the first real call surfaces
+3. Known issue: dedupe a prep task that already exists
+4. If time before the freeze (Sat 09:30): community detection → contexts as rule scopes; shortest-path explanation in the "why" panel
 
 Then the submission: README with graph model + Cypher (rule 10), video, blog post, file `../BUGS.md` #1 upstream, AI disclosure.
 

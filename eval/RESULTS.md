@@ -1,6 +1,6 @@
 # Sentinel evaluation
 
-Run at 2026-10-15T06:53:58.200Z. 63 labelled scenarios against the Sentinel, over a synthetic user's graph.
+Run at 2026-10-15T07:15:41.007Z. 63 labelled scenarios against the Sentinel, over a synthetic user's graph.
 Labels come from the stated policy (`graph-model.md`), not from the Sentinel's output. Judgment calls are marked ⚖.
 
 ## Headline

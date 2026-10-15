@@ -66,6 +66,7 @@ export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdg
     n("Agent", "a:sentinel", { name: "Sentinel" }),
     n("Agent", "a:executor", { name: "Executor" }),
     n("Agent", "a:scout", { name: "Scout" }),
+    n("Agent", "a:mcp", { name: "MCP client" }),
   ];
 
   const edges: SeedEdge[] = [

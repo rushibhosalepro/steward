@@ -14,7 +14,7 @@ import { check, type ProposedAction } from "../sentinel/sentinel";
 // There is deliberately NO approve / reject / accept-rule tool: an agent over MCP can propose,
 // but only a human in Steward's UI can approve an ASK, and nothing can approve a BLOCK.
 
-const BOOKKEEPING = ["User", "Agent", "Action", "Approval", "Rule", "Suggestion", "Request", "Plan", "Step"];
+const BOOKKEEPING = ["User", "Agent", "Action", "Approval", "Rule", "Suggestion", "Request", "Plan", "Step", "AuditEvent"];
 
 const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 const READ = { readOnlyHint: true, openWorldHint: false } as const;

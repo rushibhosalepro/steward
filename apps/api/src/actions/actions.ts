@@ -1,4 +1,5 @@
 import type { Graph } from "falkordb";
+import { appendAudit } from "../audit/audit";
 import { proposeRuleIfEarned } from "../rules/rules";
 import { check, normalise, type CheckResult, type ProposedAction, type Verdict } from "../sentinel/sentinel";
 
@@ -72,6 +73,11 @@ export async function proposeAction(g: Graph, proposed: ProposedAction, proposed
   if (tainting.length) {
     await link("MATCH (a:Action {id: $id}) UNWIND $ms AS mid MATCH (m:Message {id: mid}) CREATE (a)-[:TAINTED_BY]->(m)", { ms: tainting });
   }
+  await appendAudit(g, "verdict", id, {
+    action: { ...action, derivedFrom: source },
+    verdict: result.verdict,
+    checks: result.checks.map((c) => ({ check: c.check, status: c.status, refs: c.refs ?? [] })),
+  });
 
   return { id, status, ...result };
 }
@@ -171,6 +177,7 @@ export async function decide(g: Graph, id: string, decision: Decision, note?: st
   );
   if (res.data?.length) {
     // An approval may earn a proposed rule; it never activates one.
+    await appendAudit(g, "approval", id, { decision, note: note ?? "" });
     const proposedRule = decision === "approved" ? await proposeRuleIfEarned(g, id) : null;
     return proposedRule ? { ok: true, status: decision, proposedRule } : { ok: true, status: decision };
   }

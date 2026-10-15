@@ -1,4 +1,5 @@
 import type { Graph } from "falkordb";
+import { appendAudit, isPaused } from "../audit/audit";
 import { check, type ProposedAction } from "../sentinel/sentinel";
 
 // The Executor runs actions the Sentinel allowed (ready) or the user approved (approved).
@@ -95,6 +96,7 @@ async function fulfilCommitments(g: Graph, a: ActionProps, ts: number) {
 }
 
 export async function executeAction(g: Graph, id: string): Promise<ExecResult> {
+  if (await isPaused(g)) return { ok: false, id, status: "paused", error: "Steward is paused by the user; nothing runs until they resume" };
   const claimed = await claim(g, id);
   if (!claimed) {
     const r = await g.roQuery<{ status: string }>("MATCH (a:Action {id: $id}) RETURN a.status AS status", { params: { id } });
@@ -107,10 +109,12 @@ export async function executeAction(g: Graph, id: string): Promise<ExecResult> {
   const recheck = await check(g, { ...a, derivedFrom: claimed.source ?? "unknown" });
   if (recheck.verdict === "BLOCK") {
     await setStatus(g, id, "blocked", `graph changed since the verdict: ${recheck.reason}`);
+    await appendAudit(g, "execution", id, { status: "blocked", reason: recheck.reason });
     return { ok: false, id, status: "blocked", error: recheck.reason };
   }
   if (recheck.verdict === "ASK" && a.claimed_from === "ready") {
     await setStatus(g, id, "pending", `needs approval now: ${recheck.reason}`);
+    await appendAudit(g, "execution", id, { status: "pending", reason: recheck.reason });
     return { ok: false, id, status: "pending", error: recheck.reason };
   }
 
@@ -124,9 +128,11 @@ export async function executeAction(g: Graph, id: string): Promise<ExecResult> {
        CREATE (x)-[:EXECUTED]->(a)`,
       { params: { id, ts } },
     );
+    await appendAudit(g, "execution", id, { status: "done", produced, fulfilled });
     return { ok: true, id, status: "done", produced, fulfilled };
   } catch (err) {
     await setStatus(g, id, "failed", String(err));
+    await appendAudit(g, "execution", id, { status: "failed", error: String(err) });
     return { ok: false, id, status: "failed", error: String(err) };
   }
 }

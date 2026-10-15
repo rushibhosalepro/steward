@@ -1,5 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
+import { isPaused, setPaused, verifyAudit } from "./audit/audit";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
 import { decide, getAction, isProposedAction, listActions, listInbox, proposeAction } from "./actions/actions";
@@ -162,6 +163,16 @@ app.all("/users/:id/mcp", async (c) => {
   await createMcpServer(c.req.param("id")).connect(transport);
   return transport.handleRequest(c.req.raw);
 });
+
+// Kill switch and audit trail. Pausing stops the Executor; the audit chain is append-only and
+// verifiable. Deliberately not exposed over MCP.
+app.get("/users/:id/pause", async (c) => c.json({ paused: await isPaused(graphFor(c.req.param("id"))) }));
+app.post("/users/:id/pause", async (c) => {
+  const body = await c.req.json<{ paused?: boolean }>().catch(() => ({ paused: undefined }));
+  if (typeof body.paused !== "boolean") return c.json({ error: "need { paused: boolean }" }, 400);
+  return c.json(await setPaused(graphFor(c.req.param("id")), body.paused));
+});
+app.get("/users/:id/audit/verify", async (c) => c.json(await verifyAudit(graphFor(c.req.param("id")))));
 
 // The sandboxed tools' state, read straight from the graph.
 app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));

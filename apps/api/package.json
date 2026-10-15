@@ -6,7 +6,8 @@
     "dev": "bun --watch --env-file=../../.env src/index.ts",
     "start": "bun --env-file=../../.env src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "eval": "bun --env-file=../../.env src/eval/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",

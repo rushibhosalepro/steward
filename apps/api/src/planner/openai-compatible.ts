@@ -13,6 +13,7 @@ export type ProviderConfig = {
   apiKey?: string;
   model: string;
   jsonMode: boolean; // ask for response_format json_object (retried without it on a 400)
+  temperature?: number; // omitted when undefined: OpenAI's GPT-5 models reject anything but the default
   headers?: Record<string, string>;
 };
 
@@ -21,26 +22,30 @@ type Env = Record<string, string | undefined>;
 // Default models are starting points: override with STEWARD_MODEL_<PROVIDER> if your account
 // has a different one. A provider is "configured" when its key is set (Ollama: when enabled).
 export const PROVIDERS: Record<string, (env: Env) => ProviderConfig | null> = {
+  openai: (env) => env.OPENAI_API_KEY ? {
+    name: "openai", baseUrl: "https://api.openai.com/v1", apiKey: env.OPENAI_API_KEY,
+    model: env.STEWARD_MODEL_OPENAI ?? "gpt-5.4-mini", jsonMode: true,
+  } : null,
   xai: (env) => env.XAI_API_KEY ? {
     name: "xai", baseUrl: "https://api.x.ai/v1", apiKey: env.XAI_API_KEY,
-    model: env.STEWARD_MODEL_XAI ?? "grok-4", jsonMode: true,
+    model: env.STEWARD_MODEL_XAI ?? "grok-4", jsonMode: true, temperature: 0,
   } : null,
   groq: (env) => env.GROQ_API_KEY ? {
     name: "groq", baseUrl: "https://api.groq.com/openai/v1", apiKey: env.GROQ_API_KEY,
-    model: env.STEWARD_MODEL_GROQ ?? "openai/gpt-oss-120b", jsonMode: true,
+    model: env.STEWARD_MODEL_GROQ ?? "openai/gpt-oss-120b", jsonMode: true, temperature: 0,
   } : null,
   openrouter: (env) => env.OPENROUTER_API_KEY ? {
     name: "openrouter", baseUrl: "https://openrouter.ai/api/v1", apiKey: env.OPENROUTER_API_KEY,
-    model: env.STEWARD_MODEL_OPENROUTER ?? "meta-llama/llama-3.3-70b-instruct:free", jsonMode: true,
+    model: env.STEWARD_MODEL_OPENROUTER ?? "meta-llama/llama-3.3-70b-instruct:free", jsonMode: true, temperature: 0,
     headers: { "X-Title": "Steward" },
   } : null,
   gemini: (env) => env.GEMINI_API_KEY ? {
     name: "gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", apiKey: env.GEMINI_API_KEY,
-    model: env.STEWARD_MODEL_GEMINI ?? "gemini-2.5-flash", jsonMode: true,
+    model: env.STEWARD_MODEL_GEMINI ?? "gemini-2.5-flash", jsonMode: true, temperature: 0,
   } : null,
   ollama: (env) => env.OLLAMA_ENABLED === "1" ? {
     name: "ollama", baseUrl: env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
-    model: env.STEWARD_MODEL_OLLAMA ?? "llama3.1", jsonMode: true,
+    model: env.STEWARD_MODEL_OLLAMA ?? "llama3.1", jsonMode: true, temperature: 0,
   } : null,
 };
 
@@ -95,7 +100,7 @@ export class OpenAICompatiblePlanner implements Planner {
       body: JSON.stringify({
         model: this.cfg.model,
         messages,
-        temperature: 0,
+        ...(this.cfg.temperature !== undefined ? { temperature: this.cfg.temperature } : {}),
         ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
       signal: AbortSignal.timeout(90_000),

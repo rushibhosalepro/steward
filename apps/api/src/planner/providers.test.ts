@@ -36,6 +36,15 @@ describe("OpenAI-compatible planner", () => {
     expect(f.calls[0]?.body).toMatchObject({ model: cfg.model, temperature: 0, response_format: { type: "json_object" } });
   });
 
+  test("OpenAI (GPT-5 family) is sent no temperature; the others are sent 0", async () => {
+    const openai = PROVIDERS.openai!({ OPENAI_API_KEY: "k" })!;
+    expect(openai.model).toBe("gpt-5.4-mini");
+    const f = fakeFetch([{ content: GOOD }]);
+    await new OpenAICompatiblePlanner(openai, f.impl).plan("x", ctx, "");
+    expect(f.calls[0]?.url).toBe("https://api.openai.com/v1/chat/completions");
+    expect("temperature" in f.calls[0]!.body).toBe(false);
+  });
+
   test("strips code fences", () => {
     expect(parsePlan("```json\n" + GOOD + "\n```").ok).toBe(true);
   });
@@ -80,6 +89,7 @@ describe("provider registry", () => {
     expect(choosePlanner("auto", {}).name).toBe("offline");
     expect(choosePlanner("auto", { GROQ_API_KEY: "k", GEMINI_API_KEY: "k" }).name).toBe("gemini");
     expect(choosePlanner("auto", { GROQ_API_KEY: "k", ANTHROPIC_API_KEY: "k" }).name).toBe("claude");
+    expect(choosePlanner("auto", { GROQ_API_KEY: "k", OPENAI_API_KEY: "k" }).name).toBe("openai");
     expect(choosePlanner(undefined, { STEWARD_PLANNER: "offline", GROQ_API_KEY: "k" }).name).toBe("offline");
   });
 

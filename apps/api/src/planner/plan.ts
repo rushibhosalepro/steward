@@ -15,7 +15,7 @@ import type { Context } from "../retrieval/retrieve";
 //   (Plan)-[:USED_CONTEXT]->(entry points)   (Agent planner)-[:WROTE]->(Plan)
 
 type Env = Record<string, string | undefined>;
-const AUTO_ORDER = ["xai", "gemini", "groq", "openrouter", "ollama"];
+const AUTO_ORDER = ["openai", "xai", "gemini", "groq", "openrouter", "ollama"];
 
 const hasClaude = (env: Env) => !!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN);
 

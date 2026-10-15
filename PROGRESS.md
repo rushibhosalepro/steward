@@ -113,7 +113,7 @@ asking. The rule is deliberately narrow:
 ### The full loop today, on the Priya scenario
 
 ```
-"email Priya the Atlas update v2" (hand-written for now; the Planner will write these)
+"prepare for tomorrow's meeting with Priya and send her the project update"  → Planner proposes: email Priya v2 + a prep task
    │
    ▼  Sentinel: known ✓  flow ✓ (v2 → Atlas ← Priya)  provenance ✓ (Priya's own email)  rule ✗
  ASK ─► inbox ─► Asha approves ─► Executor re-checks ─► Message in the outbox, v2 attached

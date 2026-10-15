@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","model":"openai:gpt-4.1-mini","tools":["mcp__steward__inbox_list","mcp__steward__contacts_search","mcp__steward__documents_list","mcp__steward__document_read","mcp__steward__calendar_list","mcp__steward__send_email","mcp__steward__share_doc","mcp__steward__create_event","mcp__steward__create_task"]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call_tCHk2LR2seXvlwSUHXnxJmyo","name":"mcp__steward__create_task","input":{"title":"Book Goa flights"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"call_tCHk2LR2seXvlwSUHXnxJmyo","content":"{\n  \"ok\": true,\n  \"id\": \"act:6ebcf0ce-4301-4a9a-acf3-f1dc3b14b40b\"\n}"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"I have added the task \"Book Goa flights\" to your list. Let me know if you need any further assistance with it."}]}}
+{"type":"result","is_error":false,"result":"I have added the task \"Book Goa flights\" to your list. Let me know if you need any further assistance with it."}

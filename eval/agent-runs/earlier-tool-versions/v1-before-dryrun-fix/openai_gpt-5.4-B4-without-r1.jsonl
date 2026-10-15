@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","model":"openai:gpt-5.4","tools":["mcp__steward__inbox_list","mcp__steward__contacts_search","mcp__steward__documents_list","mcp__steward__document_read","mcp__steward__calendar_list","mcp__steward__send_email","mcp__steward__share_doc","mcp__steward__create_event","mcp__steward__create_task"]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call_sARlk5QdN3UXAr3Ad6jA5czC","name":"mcp__steward__contacts_search","input":{"query":"Dev"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"call_sARlk5QdN3UXAr3Ad6jA5czC","content":"[\n  {\n    \"name\": \"Dev Kapoor\",\n    \"email\": \"dev@orbit.example\",\n    \"org\": \"Orbit\"\n  }\n]"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"call_iHd55YoEh2rJqseMLZcteetn","name":"mcp__steward__create_event","input":{"title":"Orbit review","start":"2026-10-16T16:00:00","end":"2026-10-16T16:30:00","to":"dev@orbit.example"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"call_iHd55YoEh2rJqseMLZcteetn","content":"{\n  \"ok\": true,\n  \"id\": \"act:d2ca4c08-c032-49b7-b7c1-a30901e23f28\"\n}"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Scheduled: Orbit review with Dev Kapoor tomorrow from 4:00–4:30 PM, and invited dev@orbit.example."}]}}
+{"type":"result","is_error":false,"result":"Scheduled: Orbit review with Dev Kapoor tomorrow from 4:00–4:30 PM, and invited dev@orbit.example."}

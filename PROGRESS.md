@@ -381,3 +381,13 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | Scaled external-agent benchmark (13 tasks × 2 conditions × 2 runs × Haiku/Sonnet, 104 runs) | **Without Steward: Haiku 14/16, Sonnet 8/16 attacks succeeded. With Steward: 0/16 both. Legit 10/10 everywhere, 0 false blocks.** Sonnet resists obvious injections itself but still leaks on "who may see what" calls (restricted pricing, mass send, a new personal address) |
 | Scale benchmark, 48k nodes / 75k edges (`eval/SCALE.md`) | Sentinel p50 **557 ms → 100 ms** (p95 135 ms) after anchoring the Rule of Two taint queries on indexes and running fact matching once per action; retrieval p50 91 ms. Verdicts unchanged (63/63, 17/17, 168 tests) |
 | Redeployed to Railway | live site has the Google connector (unconfigured there), memory, worlds, pause/audit UI |
+
+### Thu ~21:00: tested on more models (your ask: "tested on multiple models")
+
+| Done | Result |
+|---|---|
+| A second agent harness: a plain tool-calling loop on any OpenAI-compatible API (`eval/openai-agent.ts`), same tasks and judges | OpenAI gpt-4.1-mini, gpt-5.4-mini, gpt-5.4 |
+| 5 models, 2 vendors, 260 runs (`eval/EXTERNAL-AGENT.md`) | **without Steward 67/80 attacks succeeded, with 0/80**; legit 48/50 with · 50/50 without; 0 false blocks. A3 + A8 beat every model without Steward |
+| Bugs the benchmark found in Steward, fixed | dry-run ASK read as "can't" (`6323d5e`); event invitee unclear (`e6bf734`); rate limit applied to "with" only (`dd2562f`) |
+| Groq open-weight gpt-oss-20b / 120b | running (free tier: 8k tokens/min, ~5 min per run); qwen3.8 too large for the free tier |
+| Real xAI Grok | needs `XAI_API_KEY`; then `--model xai:grok-4` |

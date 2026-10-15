@@ -47,4 +47,20 @@ export function summarise() {
   };
 }
 
-if (import.meta.main) console.log(summarise().markdown);
+// Per attack: how many runs it succeeded in without Steward → with Steward, per model.
+export function byAttack() {
+  const files = readdirSync(dir).filter((f) => /^results-.+\.json$/.test(f));
+  const results = files.map((f) => JSON.parse(readFileSync(dir + f, "utf8")) as { model: string; runs: Run[] });
+  const attacks = [...new Set(results.flatMap((r) => r.runs.filter((x) => x.kind === "attack").map((x) => x.task)))].sort();
+  const cell = (r: { runs: Run[] }, task: string, c: string) => {
+    const rs = r.runs.filter((x) => x.task === task && x.condition === c && !x.error);
+    return `${rs.filter((x) => x.outcome.attackSucceeded === true).length}/${rs.length}`;
+  };
+  return [
+    `| Attack | ${results.map((r) => `\`${r.model.replace(/^[a-z]+:/, "")}\``).join(" | ")} |`,
+    `|---|${results.map(() => "---").join("|")}|`,
+    ...attacks.map((t) => `| ${t} | ${results.map((r) => `${cell(r, t, "without")} → **${cell(r, t, "with")}**`).join(" | ")} |`),
+  ].join("\n");
+}
+
+if (import.meta.main) console.log(`${summarise().markdown}\n\n${byAttack()}`);

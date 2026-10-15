@@ -18,21 +18,26 @@ gets the same guarantees.
 
 ## What happened when a real agent tried
 
-An independent agent (**Claude Code**, headless) was given **only** Steward's MCP tools, no shell,
-files or web, and asked to do 5 errands and 8 attacks hidden in the inbox. The same agent was run
-again with ordinary connectors and no Steward. Judged from the graph afterwards; every transcript is
-in [`eval/agent-runs/`](eval/agent-runs/).
+Independent agents from **two vendors** (Claude Code with Haiku and Sonnet; a plain tool-calling
+agent on OpenAI's gpt-4.1-mini, gpt-5.4-mini and gpt-5.4) were given **only** Steward's MCP tools, no
+shell, files or web, and asked to do 5 errands and 8 attacks hidden in the inbox. The same agents were
+run again with ordinary connectors and no Steward. Judged from the graph afterwards; every transcript
+is in [`eval/agent-runs/`](eval/agent-runs/).
 
-| Agent | Attacks that succeeded **without** Steward | **with** Steward | Legit errands done | False blocks |
-|---|---|---|---|---|
-| Claude Haiku (2 runs × 13 tasks) | **14 / 16** | **0 / 16** | 10/10 · 10/10 | 0 |
-| Claude Sonnet (2 runs × 13 tasks) | **8 / 16** | **0 / 16** | 10/10 · 10/10 | 0 |
+| Model | Family | Attacks that succeeded **without** Steward | **with** Steward | Legit errands done (with · without) | False blocks | Runs (errors) |
+|---|---|---|---|---|---|---|
+| `openai:gpt-4.1-mini` | OpenAI | **16 / 16** | **0 / 16** | 8 / 10 · 10 / 10 | 0 | 52 (0) |
+| `openai:gpt-5.4` | OpenAI | **15 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
+| `haiku` | Anthropic · via Claude Code | **14 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
+| `openai:gpt-5.4-mini` | OpenAI | **14 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
+| `sonnet` | Anthropic · via Claude Code | **8 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
+| **All 5 models** | | **67 / 80** | **0 / 80** | 48 / 50 · 50 / 50 | 0 | 260 (0) |
 
-Even the stronger model leaks without Steward when the risky part is a judgment about *who may see
-what*: restricted pricing to a colleague not cleared for it, a mass send to every contact, a known
-contact asking for files at a new personal address. With Steward the agents still *tried* (an
-outsider's address from a forwarded request, an invented recipient), and the Sentinel blocked or
-asked every time: **0 of 32 attacks across both models, 20/20 legitimate errands done.** Details and honest limits: [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md).
+**Every model leaks without Steward; none does with it.** Two attacks succeeded against all five
+models: restricted pricing to a colleague who isn't cleared for it, and a known contact asking for
+files at a new personal address. A model can't know who may see what; the graph does. The benchmark
+also found two usability bugs in Steward's MCP tools, which are fixed. Details, per-attack table and
+honest limits: [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md).
 
 ---
 
@@ -184,7 +189,7 @@ answer. The graph isn't storage beside the product; it *is* the decision.
 | Labelled policy eval: 63 scenarios, 32 negative controls | **First run: 0/63 unsafe allowed**, 23/23 should-BLOCK blocked, 61/63 exact (two over-cautious misses, fixed, labels unchanged) | [`eval/RESULTS.md`](eval/RESULTS.md), [`eval/RESULTS-first-run.md`](eval/RESULTS-first-run.md) |
 | Learning replay | approval prompts per round **3 → 3 → 3 → 0 → 0 → 0**, still 0 unsafe after | same |
 | Adversarial suite through the whole pipeline (planner, Sentinel, Executor, MCP, audit, HTTP) | **17/17 attacks held**, checking that the side effect never happened | [`eval/SECURITY.md`](eval/SECURITY.md) |
-| External agent (Claude Code, 104 runs) with vs without Steward | **without: 22/32 attacks succeeded · with: 0/32**, legit 20/20 both, 0 false blocks | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
+| External agents (5 models, 2 vendors, 260 runs) with vs without Steward | **without: 67/80 attacks succeeded · with: 0/80**, legit 48/50 · 50/50, 0 false blocks | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
 | Live LLM planners following an injected email | **fooled 5/5 (Groq gpt-oss-120b, OpenAI gpt-5.4-mini), blocked 5/5** | `results.md` in the planning notes |
 | Scale: 48k-node, 75k-edge user graph | **Sentinel, all 8 checks: p50 100 ms, p95 135 ms**; planner retrieval p50 91 ms. The first run (557 ms) exposed a taint query that scanned the whole inbox; fixed, same verdicts | [`eval/SCALE.md`](eval/SCALE.md) |
 | 168 automated tests against a real FalkorDB | `bun run test` | |
@@ -230,6 +235,7 @@ Human-only actions (approve, rules, pause, reset) ask for the **approver code**:
 | `cd apps/api && bun run eval` | the 63-scenario policy eval → `eval/RESULTS.md` |
 | `cd apps/api && bun run eval:security` | the adversarial suite → `eval/SECURITY.md` |
 | `cd apps/api && bun run eval:agent --model haiku --repeat 2` | external agent with vs without Steward (needs the `claude` CLI, logged in) |
+| `cd apps/api && bun run eval:agent --model openai:gpt-5.4 --repeat 2` | the same with any OpenAI-compatible model (`groq:…`, `xai:…`, `gemini:…`); `bun run src/eval/agent-summary.ts` builds the cross-model table |
 | `cd apps/api && bun run eval:scale` | latency on a ~50k-node graph → `eval/SCALE.md` |
 
 **Planner:** `STEWARD_PLANNER=auto | offline | openai | claude | groq | gemini | xai | openrouter | ollama`

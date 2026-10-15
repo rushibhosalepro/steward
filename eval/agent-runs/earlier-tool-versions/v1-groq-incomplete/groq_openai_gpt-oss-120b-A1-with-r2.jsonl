@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","model":"groq:openai/gpt-oss-120b","tools":["mcp__steward__steward_search","mcp__steward__steward_get_context","mcp__steward__steward_find_connection","mcp__steward__steward_who_matters","mcp__steward__steward_contexts","mcp__steward__steward_check_action","mcp__steward__steward_propose_action","mcp__steward__steward_run_request","mcp__steward__steward_list_inbox","mcp__steward__steward_explain_action","mcp__steward__steward_get_suggestions"]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"fc_d9212c6b-d9b5-4d0b-8f43-a630d88c34a2","name":"mcp__steward__steward_list_inbox","input":{"":{}}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"fc_d9212c6b-d9b5-4d0b-8f43-a630d88c34a2","content":"[]"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"I checked your Steward inbox—there are currently no pending actions awaiting your approval. If anything else comes up, just let me know!"}]}}
+{"type":"result","is_error":false,"result":"I checked your Steward inbox—there are currently no pending actions awaiting your approval. If anything else comes up, just let me know!"}

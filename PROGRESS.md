@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~11:05 IST, 11h into the 96h window.
+**Last updated:** Thu Oct 15, ~11:30 IST, 11.5h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -31,7 +31,10 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 
 | 3 | `dcc86de` | **Actions in the graph + approval inbox** | Every proposed action becomes an `Action` node: `DERIVED_FROM` its source (inbound `Message`, or a `Request` node for things the user typed), `TARGETS` the person, `USES` the docs, `PROPOSED` by the Planner, `CHECKED` by the Sentinel, and `JUSTIFIED_BY {check, status}` edges to every entity its verdict rests on. ASK → `pending` (the inbox), ALLOW → `ready`, BLOCK → `blocked`. Approve/reject creates an `Approval` node; **a BLOCK can't be approved in-app**, and nothing is decided twice | 8 tests: graph wiring, inbox, why-panel data, approve, double-decide 409, blocked can't be approved, Request provenance, reject + 404 |
 
-**Tests:** 25 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| fix | `296fd14` | **Provenance for Request sources** | User-typed actions derive from a `Request` node; the Sentinel now treats that as the user asking (it would have read as a stranger and blocked on re-check). Sources with no sender ASK | 2 tests |
+| 4 | *this commit* | **Executor + sandboxed tools** | Runs `ready` / `approved` actions. Claims atomically (`status → executing` + `CLAIMED_BY` edge), **re-checks against the current graph** (BLOCK → blocked; a once-allowed action that now needs approval → back to the inbox), then acts as graph writes: email → outbound `Message` `TO` the person `ATTACHES` the docs; event → `Meeting` `WITH` the invitee; task → `Task`. Sending makes the recipient a contact (`KNOWS` count +1) and records `SHARED_WITH`. Open commitments the action keeps are marked `fulfilled` with a `FULFILS` edge. Approving now also executes | 12 tests: end-to-end Priya flow, commitment kept, contact memory, claim/execute edges, no double run, pending/blocked refused, doc turned restricted after approval → blocked, rule revoked after ALLOW → back to inbox, calendar, executor pass, task blocking |
+
+**Tests:** 39 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -45,7 +48,10 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | `POST /users/:id/actions` | proposes an action: Sentinel verdict + stored as an `Action` node |
 | `GET /users/:id/inbox` | pending (ASK) actions awaiting approval |
 | `GET /users/:id/actions/:actionId` | one action with checks, source, `JUSTIFIED_BY` entities and decisions (the "why" panel's data) |
-| `POST /users/:id/actions/:actionId/approve` · `/reject` | records an `Approval`; 409 if blocked or already decided |
+| `POST /users/:id/actions/:actionId/approve` · `/reject` | records an `Approval`; approve also executes; 409 if blocked or already decided |
+| `POST /users/:id/actions/:actionId/execute` | run one ready/approved action (re-checked first) |
+| `POST /users/:id/executor/run` | one Executor pass over everything ready or approved |
+| `GET /users/:id/outbox` · `/calendar` · `/tasks` | the sandboxed tools' state, read from the graph |
 
 ### What the Sentinel decides on the demo world today
 
@@ -70,13 +76,13 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | # | Job (from `graph-model.md`) | Status |
 |---|---|---|
 | 1 | Per-user isolation (multigraph) | ✅ `graphFor(userId)` → `user_<id>` |
-| 2 | Ingest inbound mail, keep knowledge current | ⬜ |
+| 2 | Ingest inbound mail, keep knowledge current | 🟨 outbound side done: sending updates `KNOWS`, `SHARED_WITH`, commitments. Inbound ingest not yet |
 | 3 | GraphRAG retrieval for the Planner | ⬜ (the multi-hop query exists in tests) |
 | 4 | Conversation memory (Session / Turn) | ⬜ |
 | 5 | The plan as Plan / Step nodes | ⬜ |
-| 6 | Agent coordination via Action status | 🟨 Planner → Sentinel handoff recorded as `PROPOSED` / `CHECKED` edges and Action status; Executor not yet |
+| 6 | Agent coordination via Action status | ✅ Planner → Sentinel → Executor via Action status + `PROPOSED` / `CHECKED` / `CLAIMED_BY` / `EXECUTED` edges (Planner itself not built yet) |
 | 7 | **Permissions (Sentinel)** | ✅ 5 checks |
-| 8 | Tools' state as graph nodes (outbox, calendar, tasks) | 🟨 seeded, no tools write yet |
+| 8 | Tools' state as graph nodes (outbox, calendar, tasks) | ✅ Executor writes them; views read them |
 | 9 | Procedural memory (Rules) | 🟨 Sentinel reads rules; nothing creates them yet |
 | 10 | Proactive suggestions (Scout) | ⬜ |
 | 11 | PageRank prioritisation | ⬜ |
@@ -93,7 +99,7 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | Seeded synthetic user, zero login | ✅ seed endpoint; no UI yet |
 | Approval inbox | ✅ API (no UI yet) |
 | Planner (LLM) with graph retrieval | ⬜ |
-| Executor + 3 sandboxed tools | ⬜ |
+| Executor + 3 sandboxed tools | ✅ |
 | Learning: approve → propose narrow rule → accept / revoke | ⬜ |
 | Ingest of inbound mail | ⬜ |
 | Scout + PageRank | ⬜ |
@@ -106,7 +112,6 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 
 ## Build order from here (one feature, one commit)
 
-4. **Executor + sandboxed tools:** approved and allowed actions write outbox `Message`, `Meeting`, `Task` nodes
 5. **Learning loop:** 3 approvals of the same action type × person → proposed `Rule` → accept / revoke
 6. **Planner (LLM) + GraphRAG retrieval:** request → subgraph → structured actions → Sentinel
 7. **Web UI:** request box, approval inbox, "why" panel

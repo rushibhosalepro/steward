@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
 import { decide, getAction, isProposedAction, listInbox, proposeAction } from "./actions/actions";
+import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { check } from "./sentinel/sentinel";
 
 const app = new Hono();
@@ -64,13 +65,31 @@ app.get("/users/:id/actions/:actionId", async (c) => {
   return action ? c.json(action) : c.json({ error: "no such action" }, 404);
 });
 
+// Approving an action also runs it; rejecting just records the decision.
 for (const [path, decision] of [["approve", "approved"], ["reject", "rejected"]] as const) {
   app.post(`/users/:id/actions/:actionId/${path}`, async (c) => {
+    const graph = graphFor(c.req.param("id"));
+    const actionId = c.req.param("actionId");
     const body = await c.req.json<{ note?: string }>().catch(() => ({ note: undefined }));
-    const r = await decide(graphFor(c.req.param("id")), c.req.param("actionId"), decision, body.note);
-    return r.ok ? c.json(r) : c.json({ error: r.error }, r.code);
+    const r = await decide(graph, actionId, decision, body.note);
+    if (!r.ok) return c.json({ error: r.error }, r.code);
+    if (decision === "rejected") return c.json(r);
+    return c.json({ ...r, execution: await executeAction(graph, actionId) });
   });
 }
+
+app.post("/users/:id/actions/:actionId/execute", async (c) => {
+  const r = await executeAction(graphFor(c.req.param("id")), c.req.param("actionId"));
+  return c.json(r, r.ok ? 200 : r.status === "missing" ? 404 : 409);
+});
+
+// One Executor pass over everything ready or approved.
+app.post("/users/:id/executor/run", async (c) => c.json(await runExecutor(graphFor(c.req.param("id")))));
+
+// The sandboxed tools' state, read straight from the graph.
+app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));
+app.get("/users/:id/calendar", async (c) => c.json(await calendarView(graphFor(c.req.param("id")))));
+app.get("/users/:id/tasks", async (c) => c.json(await tasksView(graphFor(c.req.param("id")))));
 
 export default {
   port: Number(process.env.PORT ?? 8787),

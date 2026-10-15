@@ -67,6 +67,11 @@ export async function proposeAction(g: Graph, proposed: ProposedAction, proposed
       { js: justifications },
     );
   }
+  // Taint as a first-class edge: which untrusted mail this action's data or recipient traces to.
+  const tainting = result.checks.find((c) => c.check === "rule_of_two")?.refs ?? [];
+  if (tainting.length) {
+    await link("MATCH (a:Action {id: $id}) UNWIND $ms AS mid MATCH (m:Message {id: mid}) CREATE (a)-[:TAINTED_BY]->(m)", { ms: tainting });
+  }
 
   return { id, status, ...result };
 }

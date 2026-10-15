@@ -24,7 +24,7 @@ export type Status = "pass" | "ask" | "block" | "skip";
 export type Verdict = "ALLOW" | "ASK" | "BLOCK";
 
 export type CheckResult = {
-  check: "known_recipient" | "information_flow" | "content_flow" | "provenance" | "calendar" | "standing_rule";
+  check: "known_recipient" | "information_flow" | "content_flow" | "provenance" | "rule_of_two" | "calendar" | "standing_rule";
   status: Status;
   reason: string;
   evidence: string[];     // human-readable graph paths
@@ -48,6 +48,16 @@ OPTIONAL MATCH (d)-[:BELONGS_TO]->(pr:Project)<-[:MEMBER_OF]-(m:Person {email: $
 OPTIONAL MATCH (newer:Document)-[:SUPERSEDES]->(d)
 RETURN d.title AS title, d.sensitivity AS sensitivity, s.name AS sharedWith,
        pr.id AS projectId, pr.name AS project, m.name AS member, newer.title AS newer`,
+
+  // Untrusted inbound mail: from someone the user doesn't know, or flagged. What it mentions.
+  untrusted: `MATCH (m:Message {direction: 'inbound'})-[:FROM]->(s:Person)
+OPTIONAL MATCH (u:User)-[:KNOWS]->(s)
+WITH m, s, count(u) AS known
+WHERE known = 0 OR coalesce(m.flagged, false) = true
+OPTIONAL MATCH (m)-[:MENTIONS]->(e)
+RETURN m.id AS id, m.subject AS subject, s.name AS from, s.email AS email, collect(e.id) AS mentions`,
+
+  sensitivity: `MATCH (d:Document) WHERE d.id IN $ids RETURN d.title AS title, d.sensitivity AS sensitivity`,
 
   facts: `MATCH (d:Document)-[:CONTAINS]->(f:Fact)
 RETURN f.id AS id, f.text AS text, f.markers AS markers, d.id AS doc, d.title AS title`,
@@ -134,15 +144,24 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
 // email instead of attaching the pricing sheet. Every fact the text gives away is traced back
 // to its document, and the same path check decides whether that document may reach the
 // recipient. Anything someone else will read counts: subject, body, an invite's title.
-async function contentFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
-  const base = { check: "content_flow" as const, cypher: [Q.facts, Q.docFlow] };
-  const text = [a.subject, a.body, a.type === "create_event" ? a.title : undefined].filter(Boolean).join("\n").toLowerCase();
-  if (!a.to || !text.trim()) return { ...base, status: "skip", reason: "no text leaves your graph", evidence: [] };
+const outgoingText = (a: ProposedAction) =>
+  [a.subject, a.body, a.type === "create_event" ? a.title : undefined].filter(Boolean).join("\n").toLowerCase();
 
+// The facts an action's outgoing text gives away, each with the marker that gave it away.
+async function factsIn(g: Graph, a: ProposedAction) {
+  const text = outgoingText(a);
+  if (!a.to || !text.trim()) return [];
   const facts = (await g.roQuery<{ id: string; text: string; markers: string[]; doc: string; title: string }>(Q.facts)).data ?? [];
-  const found = facts
+  return facts
     .map((f) => ({ ...f, marker: f.markers.find((m) => text.includes(m.toLowerCase())) }))
     .filter((f): f is typeof f & { marker: string } => !!f.marker);
+}
+
+async function contentFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
+  const base = { check: "content_flow" as const, cypher: [Q.facts, Q.docFlow] };
+  if (!a.to || !outgoingText(a).trim()) return { ...base, status: "skip", reason: "no text leaves your graph", evidence: [] };
+
+  const found = await factsIn(g, a);
   if (!found.length) return { ...base, status: "pass", reason: "the text gives away nothing from your documents", evidence: [] };
 
   const flow = await informationFlow(g, { ...a, docs: [...new Set(found.map((f) => f.doc))] });
@@ -151,6 +170,39 @@ async function contentFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
     ? `the text mentions ${found.map((f) => `“${f.marker}”`).join(", ")}; the recipient may see where that comes from`
     : `the text gives away ${found.map((f) => `“${f.text}”`).join(", ")}: ${flow.reason}`;
   return { ...base, status: flow.status, reason, evidence: [...gives, ...flow.evidence], refs: [...found.map((f) => f.id), ...(flow.refs ?? [])] };
+}
+
+// Meta's "Agents Rule of Two": an agent must not, unsupervised, combine (A) untrusted input,
+// (B) private data and (C) an external effect. Taint (A) comes from the graph, not from the
+// planner's claim about provenance: is a stranger, or a flagged mail, asking for the data being
+// sent, or is the recipient that stranger? If A, B and C all hold, a human must approve: the
+// check answers ASK, which no standing rule can turn into ALLOW.
+async function ruleOfTwo(g: Graph, a: ProposedAction): Promise<CheckResult> {
+  const base = { check: "rule_of_two" as const, cypher: [Q.untrusted, Q.sensitivity, Q.facts] };
+  const external = OUTBOUND.includes(a.type) || (a.type === "create_event" && !!a.to);
+  if (!external) return { ...base, status: "skip", reason: "nothing leaves your graph", evidence: [] };
+
+  const facts = await factsIn(g, a);
+  const dataIds = [...new Set([...(a.docs ?? []), ...facts.map((f) => f.doc)])];
+  const sensitive = dataIds.length
+    ? ((await g.roQuery<{ title: string; sensitivity: string }>(Q.sensitivity, { params: { ids: dataIds } })).data ?? [])
+        .filter((d) => d.sensitivity === "internal" || d.sensitivity === "restricted")
+    : [];
+
+  const untrusted = (await g.roQuery<{ id: string; subject: string; from: string; email: string; mentions: string[] }>(Q.untrusted)).data ?? [];
+  const tainting = untrusted.filter((m) => m.email === a.to || m.mentions.some((id) => dataIds.includes(id)));
+
+  const legs = [
+    tainting.length ? `A untrusted input: ${tainting.map((m) => `“${m.subject}” from ${m.from}`).join(", ")}` : null,
+    sensitive.length ? `B private data: ${sensitive.map((d) => `${d.title} (${d.sensitivity})`).join(", ")}` : null,
+    "C external effect: it leaves your graph",
+  ].filter((x): x is string => !!x);
+  const refs = tainting.map((m) => m.id);
+
+  if (tainting.length && sensitive.length) {
+    return { ...base, status: "ask", reason: "Rule of Two: untrusted input + private data + an external effect, so a human must approve (a standing rule can't)", evidence: legs, refs };
+  }
+  return { ...base, status: "pass", reason: `${legs.length} of 3 (${legs.map((l) => l[0]).join(" + ")}): safe to proceed on the other checks`, evidence: legs, refs };
 }
 
 async function provenance(g: Graph, a: ProposedAction): Promise<CheckResult> {
@@ -234,6 +286,7 @@ export async function check(g: Graph, action: ProposedAction): Promise<SentinelR
     await knownRecipient(g, a),
     await informationFlow(g, a),
     await contentFlow(g, a),
+    await ruleOfTwo(g, a),
     await provenance(g, a),
     await calendar(g, a),
     await standingRule(g, a),

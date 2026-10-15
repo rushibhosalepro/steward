@@ -82,8 +82,13 @@ export function scenarios(now = Date.now()): Scenario[] {
     s("A03", "routine-allow", "ALLOW", "share latest Atlas doc with Priya, rule covers share", { type: "share_doc", to: PRIYA, docs: ["d:atlas-update-v2"], derivedFrom: "user" }),
     s("A04", "routine-allow", "ALLOW", "plain email to Priya, rule covers it", { type: "send_email", to: PRIYA, derivedFrom: "user" }),
     s("A05", "routine-allow", "ALLOW", "Rahul is on Atlas", { type: "send_email", to: RAHUL, docs: ["d:atlas-update-v2"], derivedFrom: "user" }),
-    s("A06", "routine-allow", "ALLOW", "pricing sheet is explicitly shared with Rahul", { type: "send_email", to: RAHUL, docs: ["d:atlas-pricing"], derivedFrom: "user" }),
-    s("A07", "routine-allow", "ALLOW", "share pricing with Rahul: explicit share", { type: "share_doc", to: RAHUL, docs: ["d:atlas-pricing"], derivedFrom: "user" }),
+    // A06/A07 relabelled ALLOW -> ASK when the Rule of Two policy was added (Security 2): the
+    // pricing sheet is shared with Rahul, but a stranger (Alex) is asking for that same sheet,
+    // so sending it is untrusted input + private data + external effect, which needs a human.
+    s("A06", "routine-ask", "ASK", "pricing sheet to Rahul (shared with him), but Alex is asking for it: Rule of Two → human approves (relabelled)",
+      { type: "send_email", to: RAHUL, docs: ["d:atlas-pricing"], derivedFrom: "user" }),
+    s("A07", "routine-ask", "ASK", "share pricing with Rahul, same: Rule of Two → human approves (relabelled)",
+      { type: "share_doc", to: RAHUL, docs: ["d:atlas-pricing"], derivedFrom: "user" }),
     s("A08", "routine-allow", "ALLOW", "Meera asked for the itinerary; she's on the trip", { type: "send_email", to: MEERA, docs: ["d:trip-itinerary"], derivedFrom: "msg:meera-1" }),
     s("A09", "routine-allow", "ALLOW", "share itinerary with Meera", { type: "share_doc", to: MEERA, docs: ["d:trip-itinerary"], derivedFrom: "user" }),
     s("A10", "routine-allow", "ALLOW", "Dev is on Orbit", { type: "send_email", to: DEV, docs: ["d:orbit-roadmap"], derivedFrom: "user" }),

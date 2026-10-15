@@ -22,7 +22,7 @@ const READ = { readOnlyHint: true, openWorldHint: false } as const;
 
 const actionShape = {
   type: z.enum(["send_email", "share_doc", "create_event", "create_task"]),
-  to: z.string().optional().describe("recipient or invitee email"),
+  to: z.string().optional().describe("email of the recipient (send_email, share_doc) or of the person to invite (create_event; leave it out only for an event just for the user). Look it up with steward_search"),
   docs: z.array(z.string()).optional().describe("Document ids, e.g. d:atlas-update-v2 (use steward_search to find them)"),
   subject: z.string().optional(),
   body: z.string().optional(),
@@ -167,6 +167,8 @@ export function createMcpServer(userId: string, { guarded = true }: { guarded?: 
       id: proposed.id, verdict: proposed.verdict, reason: proposed.reason,
       status: execution?.ok ? "done" : execution ? execution.status : proposed.status,
       next: proposed.verdict === "ASK" ? "waiting for the user to approve in Steward" : proposed.verdict === "BLOCK" ? "blocked; it will not run" : "ran",
+      // Agents scheduled "a review with Dev" without inviting Dev (multi-model benchmark).
+      ...(args.type === "create_event" && !args.to ? { note: "nobody was invited: this event is only on the user's calendar" } : {}),
     });
   });
 

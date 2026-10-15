@@ -151,7 +151,9 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | 4 | `3e3a7db` | **Executor + sandboxed tools** | Runs `ready` / `approved` actions. Claims atomically (`status → executing` + `CLAIMED_BY` edge), **re-checks against the current graph** (BLOCK → blocked; a once-allowed action that now needs approval → back to the inbox), then acts as graph writes: email → outbound `Message` `TO` the person `ATTACHES` the docs; event → `Meeting` `WITH` the invitee; task → `Task`. Sending makes the recipient a contact (`KNOWS` count +1) and records `SHARED_WITH`. Open commitments the action keeps are marked `fulfilled` with a `FULFILS` edge. Approving now also executes | 12 tests: end-to-end Priya flow, commitment kept, contact memory, claim/execute edges, no double run, pending/blocked refused, doc turned restricted after approval → blocked, rule revoked after ALLOW → back to inbox, calendar, executor pass, task blocking |
 | 5 | `17ade50` | **Learning loop (procedural memory)** | After **3 approvals** of the same action type to the same person, a `Rule {status: proposed}` is created, `SCOPED_TO` the person and `LEARNED_FROM` those `Approval` nodes. It does nothing until the user **accepts**; it can be **declined** or later **revoked**. A rejection, decline or revoke restarts the streak. Rules are narrow (one type × one person) and **never override a BLOCK**: the Sentinel consults them only after every other check passes | 13 tests: no early proposal, proposal on 3rd, proposed rule changes nothing, no duplicates, accepted → ALLOW, narrowness (other person / other type still ASK), BLOCK still wins, revoke → ASK, illegal transitions, fresh streak after revoke, rejection resets, decline |
 
-**Tests:** 52 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| 6a | *this commit* | **GraphRAG retrieval** | A FalkorDB **full-text index** over names, titles, subjects and commitment text finds the entry points for a request (with stemming: "price" finds "pricing"). One **multi-hop query** (1–2 hops) expands them into the neighbourhood the Planner will see, never passing through the User or Steward's own bookkeeping (agents, actions, approvals, rules). Rendered as compact text: nodes with ids and properties, then edges as id triples. On the Priya request: 6 entry points → 13 nodes, 18 edges, including Alex's injected mail | 9 tests: term extraction, entry points, multi-hop edges, bookkeeping excluded, user prefs, rendering, stemming, empty request, per-user isolation |
+
+**Tests:** 61 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -171,6 +173,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | `GET /users/:id/outbox` · `/calendar` · `/tasks` | the sandboxed tools' state, read from the graph |
 | `GET /users/:id/rules` | proposed / active / declined / revoked rules, with how many approvals each was learned from |
 | `POST /users/:id/rules/:ruleId/accept` · `/decline` · `/revoke` | the only way a rule changes state |
+| `POST /users/:id/context` | GraphRAG: entry points, subgraph and the rendered text the Planner will get, for `{ request }` |
 
 ### What the Sentinel decides on the demo world today
 
@@ -196,7 +199,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 |---|---|---|
 | 1 | Per-user isolation (multigraph) | ✅ `graphFor(userId)` → `user_<id>` |
 | 2 | Ingest inbound mail, keep knowledge current | 🟨 outbound side done: sending updates `KNOWS`, `SHARED_WITH`, commitments. Inbound ingest not yet |
-| 3 | GraphRAG retrieval for the Planner | ⬜ (the multi-hop query exists in tests) |
+| 3 | GraphRAG retrieval for the Planner | ✅ full-text entry points + one multi-hop expansion query (vector index still to add) |
 | 4 | Conversation memory (Session / Turn) | ⬜ |
 | 5 | The plan as Plan / Step nodes | ⬜ |
 | 6 | Agent coordination via Action status | ✅ Planner → Sentinel → Executor via Action status + `PROPOSED` / `CHECKED` / `CLAIMED_BY` / `EXECUTED` edges (Planner itself not built yet) |
@@ -217,7 +220,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | Sentinel: 5 Cypher checks | ✅ |
 | Seeded synthetic user, zero login | ✅ seed endpoint; no UI yet |
 | Approval inbox | ✅ API (no UI yet) |
-| Planner (LLM) with graph retrieval | ⬜ |
+| Planner (LLM) with graph retrieval | 🟨 retrieval done; Planner next |
 | Executor + 3 sandboxed tools | ✅ |
 | Learning: approve → propose narrow rule → accept / revoke | ✅ |
 | Ingest of inbound mail | ⬜ |
@@ -231,7 +234,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 ## Build order from here (one feature, one commit)
 
-6. **Planner (LLM) + GraphRAG retrieval:** request → subgraph → structured actions → Sentinel
+6. **Planner (LLM):** context → structured actions → Sentinel, plus an offline fallback planner so the demo works with no API key. **Needs: LLM provider + key**
 7. **Web UI:** request box, approval inbox, "why" panel
 8. **Ingest of inbound mail** (entity extraction + dedup via vector / full-text index)
 9. **Scout + PageRank** suggestions

@@ -4,6 +4,7 @@ import { seedDemo } from "./seed/seed";
 import { decide, getAction, isProposedAction, listInbox, proposeAction } from "./actions/actions";
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
+import { renderContext, retrieve } from "./retrieval/retrieve";
 import { check } from "./sentinel/sentinel";
 
 const app = new Hono();
@@ -96,6 +97,14 @@ for (const decision of ["accept", "decline", "revoke"] as const) {
     return r.ok ? c.json(r) : c.json({ error: r.error }, r.code);
   });
 }
+
+// GraphRAG retrieval: what the Planner will see for a request (entry points, subgraph, rendered text).
+app.post("/users/:id/context", async (c) => {
+  const body = await c.req.json<{ request?: string }>().catch(() => ({ request: undefined }));
+  if (typeof body.request !== "string" || !body.request.trim()) return c.json({ error: "need { request }" }, 400);
+  const ctx = await retrieve(graphFor(c.req.param("id")), body.request);
+  return c.json({ ...ctx, rendered: renderContext(ctx) });
+});
 
 // The sandboxed tools' state, read straight from the graph.
 app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));

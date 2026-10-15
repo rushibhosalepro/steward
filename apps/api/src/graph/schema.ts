@@ -5,6 +5,8 @@ export const SCHEMA = [
   "CREATE INDEX FOR (e:Entity) ON (e.id)",
   "CREATE INDEX FOR (p:Person) ON (p.email)",
   "CREATE INDEX FOR (m:Meeting) ON (m.start)",
+  // Full-text entry points for retrieval: names, titles, subjects and commitment text.
+  "CREATE FULLTEXT INDEX FOR (e:Entity) ON (e.name, e.title, e.subject, e.what)",
 ];
 
 export async function applySchema(graph: Graph) {

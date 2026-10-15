@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  api, type ActionDetail, type ActivityItem, type IngestResult, type Suggestion, type MailItem, type Meeting, type OutboxItem, type PlanResult,
+  api, type ActionDetail, type ActivityItem, type GoogleStatus, type IngestResult, type Suggestion, type MailItem, type Meeting, type OutboxItem, type PlanResult,
   type Rule, type Status, type Task, type Verdict,
 } from "./api";
 
@@ -74,6 +74,7 @@ export function App() {
   const [ingested, setIngested] = useState<IngestResult | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [planners, setPlanners] = useState<string[]>(["offline"]);
+  const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [calendar, setCalendar] = useState<Meeting[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -92,6 +93,7 @@ export function App() {
 
   useEffect(() => { void guard(refresh); }, [guard, refresh]);
   useEffect(() => { void api.planners().then((p) => setPlanners(p.available)).catch(() => {}); }, []);
+  useEffect(() => { void api.googleStatus().then(setGoogle).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!selected) { setDetail(null); return; }
@@ -139,6 +141,9 @@ export function App() {
         </div>
         <div className="top-actions">
           <span className="who">Demo user: Asha Rao (synthetic)</span>
+          {google?.configured && (google.connected
+            ? <span className="status status-done" title="Allowed emails become Gmail drafts; events go on a 'Steward' calendar">Google: {google.account}</span>
+            : <button className="ghost" disabled={busy} onClick={() => guard(async () => { const r = await api.googleStart(); window.open(r.url, "_blank"); })}>Connect Google</button>)}
           <button className="ghost" onClick={reset} disabled={busy}>Reset demo</button>
         </div>
       </header>
@@ -346,6 +351,8 @@ export function App() {
                   <li key={m.id} className="plain">
                     <b>{m.subject || "(no subject)"}</b> <span className="muted small">to {m.to} · {fmtTime(m.ts)}</span>
                     {m.attachments.length > 0 && <div className="small">📎 {m.attachments.join(", ")}</div>}
+                    {m.external && <div className="small"><a href={m.external} target="_blank" rel="noreferrer">Real Gmail draft ↗</a></div>}
+                    {m.externalError && <div className="small warn">Gmail: {m.externalError}</div>}
                   </li>
                 ))}
                 {!outbox.length && <li className="muted">Nothing sent yet. (Sandboxed: nothing ever leaves the graph.)</li>}
@@ -354,7 +361,8 @@ export function App() {
             {tab === "calendar" && (
               <ul className="list">
                 {calendar.map((m) => (
-                  <li key={m.id} className="plain"><b>{m.title}</b> <span className="muted small">{fmtTime(m.start)}{m.with.length ? ` · with ${m.with.join(", ")}` : ""}</span></li>
+                  <li key={m.id} className="plain"><b>{m.title}</b> <span className="muted small">{fmtTime(m.start)}{m.with.length ? ` · with ${m.with.join(", ")}` : ""}</span>
+                    {m.external && <> · <a className="small" href={m.external} target="_blank" rel="noreferrer">Google Calendar ↗</a></>}</li>
                 ))}
               </ul>
             )}

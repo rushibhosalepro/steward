@@ -14,6 +14,7 @@ import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./e
 import { decideRule, listRules } from "./rules/rules";
 import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
 import { createBaselineMcpServer } from "./mcp/baseline";
+import { authUrl, disconnect, googleConfigured, googleStatus, handleCallback } from "./connectors/google";
 import { createMcpServer } from "./mcp/server";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
@@ -36,7 +37,27 @@ for (const path of [
   "/users/:id/actions/:actionId/approve", "/users/:id/actions/:actionId/reject",
   "/users/:id/rules/:ruleId/*", "/users/:id/pause", "/users/:id/seed",
   "/users/:id/suggestions/:sid/*", "/users/:id/mail",
+  "/connectors/google/start", "/connectors/google/disconnect",
 ]) app.use(path, human);
+
+// The real Google connector (Gmail drafts + a Steward calendar) for the account owner's own
+// Steward user. Connecting and disconnecting are human-only; the callback is bound to a
+// one-time OAuth state. Tokens stay in the connector, never in the graph.
+app.get("/connectors/google/status", (c) => c.json(googleStatus()));
+app.post("/connectors/google/start", (c) =>
+  googleConfigured() ? c.json({ url: authUrl() }) : c.json({ error: "set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET" }, 400));
+app.post("/connectors/google/disconnect", (c) => c.json(disconnect()));
+app.get("/oauth/google/callback", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  if (!code || !state) return c.html(`<p>Google sign-in was cancelled or failed: ${c.req.query("error") ?? "no code"}.</p>`, 400);
+  try {
+    const r = await handleCallback(code, state);
+    return c.html(`<p>Google connected as <b>${r.account}</b>. Steward will create Gmail drafts and events on a "Steward" calendar, only after its Sentinel allows them. You can close this tab.</p>`);
+  } catch (err) {
+    return c.html(`<p>Could not connect Google: ${String(err).replace(/</g, "&lt;")}</p>`, 400);
+  }
+});
 app.get("/approver/check", (c) => c.json({ ok: isApprover(c.req.header("x-steward-approver")) }));
 
 app.get("/health", async (c) => {

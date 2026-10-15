@@ -46,8 +46,9 @@ export type PlanResult = {
 };
 
 export type Rule = { id: string; status: string; description: string; action_type: string; person: string; learnedFrom: number; created_at: number };
-export type OutboxItem = { id: string; subject: string; body: string; to: string; email: string; attachments: string[]; ts: number };
-export type Meeting = { id: string; title: string; start: number; end: number; status: string; with: string[]; project: string | null };
+export type OutboxItem = { id: string; subject: string; body: string; to: string; email: string; attachments: string[]; ts: number; external: string | null; externalError: string | null };
+export type Meeting = { id: string; title: string; start: number; end: number; status: string; with: string[]; project: string | null; external: string | null; externalError: string | null };
+export type GoogleStatus = { configured: boolean; connected: boolean; account: string | null; steward_user: string };
 export type IngestResult = {
   messageId: string;
   sender: { id: string; name: string; known: boolean; new: boolean };
@@ -72,8 +73,9 @@ const saveCode = (code: string) => {
   try { localStorage.setItem(APPROVER_KEY, code); } catch { /* private mode: ask again next time */ }
 };
 
+// `path` is relative to the demo user (/api/users/demo) unless it starts with "/api/".
 async function call<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
-  const res = await fetch(`${base}${path}`, {
+  const res = await fetch(path.startsWith("/api/") ? path : `${base}${path}`, {
     ...init,
     headers: { "content-type": "application/json", "x-steward-approver": readCode(), ...(init?.headers ?? {}) },
   });
@@ -107,6 +109,8 @@ export const api = {
   receive: (mail: { from: { email: string; name?: string }; subject: string; body: string }) => post<IngestResult>("/mail", mail),
   mail: () => call<MailItem[]>("/mail"),
   planners: () => fetch("/api/planners").then((r) => r.json() as Promise<{ available: string[]; default: string }>),
+  googleStatus: () => fetch("/api/connectors/google/status").then((r) => r.json() as Promise<GoogleStatus>),
+  googleStart: () => call<{ url: string }>("/api/connectors/google/start", { method: "POST", body: "{}" }),
   suggestions: () => call<Suggestion[]>("/suggestions"),
   decideSuggestion: (id: string, decision: "dismiss" | "accept" | "decline") => post(`/suggestions/${id}/${decision}`),
 };

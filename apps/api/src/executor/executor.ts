@@ -1,5 +1,7 @@
 import type { Graph } from "falkordb";
 import { appendAudit, isPaused } from "../audit/audit";
+import { createDraft, createEvent, googleConnected, googleUser } from "../connectors/google";
+import { userOf } from "../db";
 import { check, type ProposedAction } from "../sentinel/sentinel";
 
 // The Executor runs actions the Sentinel allowed (ready) or the user approved (approved).
@@ -95,6 +97,41 @@ async function fulfilCommitments(g: Graph, a: ActionProps, ts: number) {
   return (res.data ?? []).map((r) => r.what);
 }
 
+// The real connector boundary. Reached only from executeAction's success path: the Sentinel
+// allowed it (or a human approved it) and the pre-execution re-check passed. Credentials stay
+// in the connector; the graph only records where the real artifact lives. A Google failure is
+// recorded on the produced node and doesn't undo the (sandboxed) graph write.
+async function syncToGoogle(g: Graph, a: ActionProps, produced: string) {
+  if (!googleConnected() || userOf(g) !== googleUser()) return null;
+  try {
+    let ext: { id: string; url: string; provider: string } | null = null;
+    if (a.type === "send_email" || a.type === "share_doc") {
+      const docs = a.docs?.length
+        ? (await g.roQuery<{ title: string; facts: string[] }>(
+            "MATCH (d:Document) WHERE d.id IN $ids OPTIONAL MATCH (d)-[:CONTAINS]->(f:Fact) RETURN d.title AS title, collect(f.text) AS facts",
+            { params: { ids: a.docs } })).data ?? []
+        : [];
+      const d = await createDraft({
+        to: a.to!, subject: a.subject ?? (a.type === "share_doc" ? "Shared with you" : ""),
+        body: `${a.body ?? ""}\n\n— drafted by Steward after its Sentinel allowed it. Not sent.`,
+        attachments: docs.map((x) => ({ filename: `${x.title}.txt`, text: [x.title, "", ...x.facts].join("\n") })),
+      });
+      ext = { ...d, provider: "gmail-draft" };
+    } else if (a.type === "create_event" && a.start != null && a.end != null) {
+      ext = { ...(await createEvent({ title: a.title ?? "Meeting", start: a.start, end: a.end, invitee: a.to })), provider: "google-calendar" };
+    }
+    if (!ext) return null;
+    await g.query("MATCH (n:Entity {id: $produced}) SET n.external_provider = $p, n.external_id = $eid, n.external_url = $url", {
+      params: { produced, p: ext.provider, eid: ext.id, url: ext.url },
+    });
+    return ext;
+  } catch (err) {
+    const error = String(err).slice(0, 300);
+    await g.query("MATCH (n:Entity {id: $produced}) SET n.external_error = $error", { params: { produced, error } });
+    return { error };
+  }
+}
+
 // EVALUATION BASELINE ONLY: what an agent's tools would do with no Sentinel in front of them.
 // Used by the "without Steward" condition of the external-agent benchmark, through an MCP
 // endpoint that exists only when STEWARD_ALLOW_UNGUARDED=1 (never set in production).
@@ -145,7 +182,8 @@ export async function executeAction(g: Graph, id: string): Promise<ExecResult> {
        CREATE (x)-[:EXECUTED]->(a)`,
       { params: { id, ts } },
     );
-    await appendAudit(g, "execution", id, { status: "done", produced, fulfilled });
+    const external = await syncToGoogle(g, a, produced);
+    await appendAudit(g, "execution", id, { status: "done", produced, fulfilled, external });
     return { ok: true, id, status: "done", produced, fulfilled };
   } catch (err) {
     await setStatus(g, id, "failed", String(err));
@@ -170,7 +208,7 @@ export async function outbox(g: Graph) {
     `MATCH (m:Message {direction: 'outbound'})-[:TO]->(p:Person)
      OPTIONAL MATCH (m)-[:ATTACHES]->(d:Document)
      RETURN m.id AS id, m.subject AS subject, m.body AS body, p.name AS to, p.email AS email,
-            collect(d.title) AS attachments, m.ts AS ts
+            collect(d.title) AS attachments, m.ts AS ts, m.external_url AS external, m.external_error AS externalError
      ORDER BY ts DESC`,
   );
   return res.data ?? [];
@@ -182,7 +220,7 @@ export async function calendarView(g: Graph) {
      OPTIONAL MATCH (m)-[:WITH]->(p:Person)
      OPTIONAL MATCH (m)-[:ABOUT]->(pr:Project)
      RETURN m.id AS id, m.title AS title, m.start AS start, m.end AS end, m.status AS status,
-            collect(DISTINCT p.name) AS with, pr.name AS project
+            collect(DISTINCT p.name) AS with, pr.name AS project, m.external_url AS external, m.external_error AS externalError
      ORDER BY start`,
   );
   return res.data ?? [];

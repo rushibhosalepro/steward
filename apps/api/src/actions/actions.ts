@@ -1,6 +1,6 @@
 import type { Graph } from "falkordb";
 import { proposeRuleIfEarned } from "../rules/rules";
-import { check, type CheckResult, type ProposedAction, type Verdict } from "../sentinel/sentinel";
+import { check, normalise, type CheckResult, type ProposedAction, type Verdict } from "../sentinel/sentinel";
 
 // Every proposed action becomes an Action node, wired to where it came from, who it
 // targets, what it uses, which agents touched it, and the entities its verdict rests on.
@@ -22,7 +22,8 @@ function compact(obj: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null));
 }
 
-export async function proposeAction(g: Graph, action: ProposedAction, proposedBy = "a:planner") {
+export async function proposeAction(g: Graph, proposed: ProposedAction, proposedBy = "a:planner") {
+  const action = normalise(proposed);
   const result = await check(g, action);
   const id = `act:${crypto.randomUUID()}`;
   const now = Date.now();

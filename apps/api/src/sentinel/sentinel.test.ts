@@ -126,3 +126,21 @@ describe("calendar", () => {
     expect(status(r, "calendar")).toBe("pass");
   });
 });
+
+describe("fixes from the first eval run", () => {
+  test("an email address in different case is the same person", async () => {
+    const r = await run({ type: "send_email", to: "Priya@Northwind.EXAMPLE", docs: ["d:atlas-update-v2"], derivedFrom: "user" });
+    expect(status(r, "known_recipient")).toBe("pass");
+    expect(status(r, "information_flow")).toBe("pass");
+  });
+
+  test("an event with no invitee in a free slot runs: it only touches your own calendar", async () => {
+    const r = await run({ type: "create_event", title: "Focus", start: tomorrowAt(now, 14), end: tomorrowAt(now, 15), derivedFrom: "user" });
+    expect(r.verdict).toBe("ALLOW");
+  });
+
+  test("but an invitee-less event a stranger asked for still asks", async () => {
+    const r = await run({ type: "create_event", title: "Call", start: tomorrowAt(now, 14), end: tomorrowAt(now, 15), derivedFrom: "msg:alex-1" });
+    expect(r.verdict).toBe("ASK");
+  });
+});

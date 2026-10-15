@@ -188,6 +188,7 @@ async function calendar(g: Graph, a: ProposedAction): Promise<CheckResult> {
 async function standingRule(g: Graph, a: ProposedAction): Promise<CheckResult> {
   const base = { check: "standing_rule" as const, cypher: [Q.rule] };
   if (a.type === "create_task") return { ...base, status: "pass", reason: "tasks only touch your own list", evidence: [] };
+  if (a.type === "create_event" && !a.to) return { ...base, status: "pass", reason: "an event with no invitee only touches your own calendar", evidence: [] };
   if (!a.to) return { ...base, status: "ask", reason: "no standing rule applies", evidence: [] };
 
   const res = await g.roQuery<{ id: string; description: string; name: string }>(Q.rule, { params: { type: a.type, email: a.to } });
@@ -196,7 +197,13 @@ async function standingRule(g: Graph, a: ProposedAction): Promise<CheckResult> {
   return { ...base, status: "pass", reason: `your rule "${row.description}" allows it`, evidence: [`Rule "${row.description}" -SCOPED_TO-> ${row.name}`], refs: [row.id] };
 }
 
-export async function check(g: Graph, a: ProposedAction): Promise<SentinelResult> {
+// Email addresses are case-insensitive; the graph stores them lower-cased.
+export function normalise(a: ProposedAction): ProposedAction {
+  return a.to ? { ...a, to: a.to.trim().toLowerCase() } : a;
+}
+
+export async function check(g: Graph, action: ProposedAction): Promise<SentinelResult> {
+  const a = normalise(action);
   const checks = [
     await knownRecipient(g, a),
     await informationFlow(g, a),

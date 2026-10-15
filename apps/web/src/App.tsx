@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  api, type ActionDetail, type ActivityItem, type IngestResult, type MailItem, type Meeting, type OutboxItem, type PlanResult,
+  api, type ActionDetail, type ActivityItem, type IngestResult, type Suggestion, type MailItem, type Meeting, type OutboxItem, type PlanResult,
   type Rule, type Status, type Task, type Verdict,
 } from "./api";
 
@@ -69,13 +69,16 @@ export function App() {
   const [tab, setTab] = useState<"mail" | "outbox" | "calendar" | "tasks" | "rules">("mail");
   const [mail, setMail] = useState<MailItem[]>([]);
   const [ingested, setIngested] = useState<IngestResult | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [calendar, setCalendar] = useState<Meeting[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const refresh = useCallback(async () => {
-    const [a, i, r, o, c, t, m] = await Promise.all([api.actions(), api.inbox(), api.rules(), api.outbox(), api.calendar(), api.tasks(), api.mail()]);
-    setActivity(a); setInbox(i); setRules(r); setOutbox(o); setCalendar(c); setTasks(t); setMail(m);
+    const [a, i, r, o, c, t, m, sg] = await Promise.all([
+      api.actions(), api.inbox(), api.rules(), api.outbox(), api.calendar(), api.tasks(), api.mail(), api.suggestions(),
+    ]);
+    setActivity(a); setInbox(i); setRules(r); setOutbox(o); setCalendar(c); setTasks(t); setMail(m); setSuggestions(sg);
   }, []);
 
   const guard = useCallback(async (fn: () => Promise<void>) => {
@@ -89,6 +92,14 @@ export function App() {
     if (!selected) { setDetail(null); return; }
     void api.action(selected).then(setDetail).catch((e) => setError(String(e)));
   }, [selected, activity]);
+
+  const runRequest = (text: string) => guard(async () => {
+    setRequest(text);
+    const result = await api.request(text, planner || undefined);
+    setPlan(result);
+    setSelected(result.steps[0]?.action.id ?? null);
+    await refresh();
+  });
 
   const submit = () => guard(async () => {
     const result = await api.request(request, planner || undefined);
@@ -198,6 +209,27 @@ export function App() {
         </section>
 
         <section className="col">
+          <div className="card">
+            <h2>Scout suggests <span className="muted small">· ranked by urgency + PageRank</span></h2>
+            <ul className="list">
+              {suggestions.map((s) => (
+                <li key={s.id} className={`item suggestion kind-${s.kind}`}>
+                  <span className="small">{s.text}</span>
+                  {s.why && <span className="muted small">{s.why}</span>}
+                  <div className="row">
+                    {s.request && <button className="primary" disabled={busy} onClick={() => runRequest(s.request!)}>Do it</button>}
+                    {s.kind === "commitment_proposed" && <>
+                      <button className="primary" disabled={busy} onClick={() => guard(async () => { await api.decideSuggestion(s.id, "accept"); await refresh(); })}>Take it on</button>
+                      <button className="ghost" disabled={busy} onClick={() => guard(async () => { await api.decideSuggestion(s.id, "decline"); await refresh(); })}>Decline</button>
+                    </>}
+                    <button className="ghost" disabled={busy} onClick={() => guard(async () => { await api.decideSuggestion(s.id, "dismiss"); await refresh(); })}>Dismiss</button>
+                  </div>
+                </li>
+              ))}
+              {!suggestions.length && <li className="muted">Nothing needs your attention.</li>}
+            </ul>
+          </div>
+
           <div className="card">
             <h2>Needs your approval <span className="count">{inbox.length}</span></h2>
             <ul className="list">

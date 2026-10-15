@@ -7,6 +7,7 @@ import { decideRule, listRules } from "./rules/rules";
 import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
 import { choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
+import { decideSuggestion, runScout } from "./scout/scout";
 import { check } from "./sentinel/sentinel";
 
 const app = new Hono();
@@ -133,6 +134,17 @@ app.post("/users/:id/mail", async (c) => {
   return c.json(await ingestMail(graphFor(c.req.param("id")), m as InboundMail), 201);
 });
 app.get("/users/:id/mail", async (c) => c.json(await listMail(graphFor(c.req.param("id")))));
+
+// Scout: proactive suggestions, ranked by urgency and PageRank. GET runs a fresh pass
+// (in production this would be on a schedule). Scout never acts on its own.
+app.get("/users/:id/suggestions", async (c) => c.json(await runScout(graphFor(c.req.param("id")))));
+
+for (const decision of ["dismiss", "accept", "decline"] as const) {
+  app.post(`/users/:id/suggestions/:sid/${decision}`, async (c) => {
+    const r = await decideSuggestion(graphFor(c.req.param("id")), c.req.param("sid"), decision);
+    return r.ok ? c.json(r) : c.json({ error: r.error }, 409);
+  });
+}
 
 // The sandboxed tools' state, read straight from the graph.
 app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));

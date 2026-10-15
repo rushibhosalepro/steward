@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~14:40 IST, 14.5h into the 96h window.
+**Last updated:** Thu Oct 15, ~15:20 IST, 15h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -136,7 +136,7 @@ asking. The rule is deliberately narrow:
 ### What's not built yet
 
 A live run of the **Claude planner** (needs an API key; the offline planner covers the demo),
-**inbound mail ingest**, **Scout** suggestions with PageRank (next: it turns proposed commitments and flagged mail into suggestions), the **evaluation** over ~60
+**inbound mail ingest**,  the **evaluation** over ~60
 labelled scenarios, and **deployment**. See *Build order* below.
 
 ---
@@ -164,7 +164,10 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 | 8 | `a537230` | **Inbound mail ingest** | `POST /users/:id/mail` takes a (simulated) mail. The **sender** resolves by email, case-insensitively; an unknown sender becomes a `Person` with no `KNOWS` edge, so stays a stranger to every check. **Mentions** are proposed by the full-text index and confirmed by a word check (people by first/last name, projects by name, documents by ≥2 distinctive title words, best match only, never a superseded version), so they link to existing nodes instead of duplicating them. A **request** ("could you send…", "please…") from a known contact becomes a *proposed* `Commitment` `TO` them, `ABOUT` what it mentions; from a stranger it only **flags** the mail. Deterministic, no LLM. UI: "Incoming mail" card with two samples + a Mail tab | 10 tests: known sender + case, mention resolution, proposed commitment, retrieval finds the new mail, new stranger has no KNOWS, flagged with no commitment, acting on it is BLOCKED, no duplicate person, no ask → no commitment, never resolves to the old version. Checked in the browser |
 
-**Tests:** 87 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| fix | `f1c1df3` | **Retrieval keeps people as entry points** | Found while testing Scout: once a few Atlas tasks existed, documents and tasks that share a word outscored Priya and pushed her out of the top-6 entry points, so "email Priya…" planned nothing. The top 3 person matches are now always included | 1 test (8 noise tasks; Priya still an entry point) |
+| 9 | *this commit* | **Scout: proactive suggestions ranked by PageRank** | The Muse-style "suggests without being asked". Six graph queries: open commitments due within 48h · requests proposed by known contacts ("take it on?") · contacts waiting for a reply (nothing sent since, not already covered by a commitment) · tasks blocked close to their due date · meetings in the next 48h with no prep task · flagged mail from strangers. Ranked by urgency plus **`algo.pageRank` over the user's whole graph** (PageRank over `KNOWS` alone is flat: every edge starts at the user), and each says why: "#1 of 5 people by centrality". Stored as `Suggestion` nodes (`Agent scout -[:SUGGESTED]->`, `-[:BECAUSE_OF]->` the entities): no duplicates across runs, dismissals stick, and suggestions **resolve themselves** when the graph changes. **Scout never acts:** a suggestion carries a request that goes through Planner → Sentinel like any other. UI: "Scout suggests" panel with Do it / Take it on / Decline / Dismiss | 11 tests: what it finds on the demo, Priya not double-listed, PageRank ordering + reason, creates no actions, no duplicates, meeting prep resolves, the commitment resolves after Planner → approve → execute, dismiss sticks, proposed commitment accept → becomes due, awaiting reply clears after a sent reply, only proposed commitments can be accepted. Checked in the browser |
+
+**Tests:** 99 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -187,6 +190,8 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | `POST /users/:id/context` | GraphRAG: entry points, subgraph and the rendered text the Planner will get, for `{ request }` |
 | `POST /users/:id/requests` | **the front door**: `{ request, planner? }` → plan → Sentinel → run / inbox / blocked |
 | `GET /users/:id/actions` | activity feed: every action, newest first |
+| `GET /users/:id/suggestions` | runs Scout and returns open suggestions, ranked |
+| `POST /users/:id/suggestions/:sid/dismiss` · `/accept` · `/decline` | dismiss any suggestion; accept or decline a proposed commitment |
 | `POST /users/:id/mail` · `GET /users/:id/mail` | receive a simulated inbound mail (sender, mentions, request resolved into the graph) · list inbound mail |
 
 ### What the Sentinel decides on the demo world today
@@ -220,8 +225,8 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | 7 | **Permissions (Sentinel)** | ✅ 5 checks |
 | 8 | Tools' state as graph nodes (outbox, calendar, tasks) | ✅ Executor writes them; views read them |
 | 9 | Procedural memory (Rules) | ✅ learned from approvals, accepted / declined / revoked by the user |
-| 10 | Proactive suggestions (Scout) | ⬜ |
-| 11 | PageRank prioritisation | ⬜ |
+| 10 | Proactive suggestions (Scout) | ✅ 6 queries, `Suggestion` nodes, self-resolving |
+| 11 | PageRank prioritisation | ✅ `algo.pageRank` over the user graph ranks suggestions and explains the rank |
 | 12 | Community detection → Contexts | ⬜ (first cut if behind) |
 | 13 | Shortest path for the "why" panel | 🟨 `JUSTIFIED_BY` edges + text paths; no algorithm yet |
 | 14 | MCP | ⬜ |
@@ -238,7 +243,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | Executor + 3 sandboxed tools | ✅ |
 | Learning: approve → propose narrow rule → accept / revoke | ✅ |
 | Ingest of inbound mail | ✅ deterministic (full-text + word check) |
-| Scout + PageRank | ⬜ |
+| Scout + PageRank | ✅ |
 | Community detection → Contexts | ⬜ |
 | Web UI: request box, approval inbox, "why" panel, suggestions | ✅ (suggestions panel waits for Scout) |
 | Eval script over ~60 labelled scenarios | ✅ 63 scenarios + learning replay; numbers in `../results.md` |
@@ -248,7 +253,6 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 ## Build order from here (one feature, one commit)
 
-9. **Scout + PageRank** suggestions
 11. Community detection, shortest-path explanations, MCP (if time before the freeze)
 
 ## Notes and decisions

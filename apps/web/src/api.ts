@@ -59,6 +59,7 @@ export type MailItem = {
   id: string; subject: string; body: string; ts: number; flagged: boolean | null;
   from: string; email: string; known: boolean; mentions: string[]; asks: string[];
 };
+export type Suggestion = { id: string; kind: string; text: string; request: string | null; score: number; why: string; refs: string[] };
 export type Task = { id: string; title: string; due: number | null; status: string; blockedBy: string[]; project: string | null };
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -88,4 +89,6 @@ export const api = {
   tasks: () => call<Task[]>("/tasks"),
   receive: (mail: { from: { email: string; name?: string }; subject: string; body: string }) => post<IngestResult>("/mail", mail),
   mail: () => call<MailItem[]>("/mail"),
+  suggestions: () => call<Suggestion[]>("/suggestions"),
+  decideSuggestion: (id: string, decision: "dismiss" | "accept" | "decline") => post(`/suggestions/${id}/${decision}`),
 };

@@ -297,7 +297,7 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 |---|---|---|---|
 | U1 | **Add the Gemini key** to `steward/.env` (in progress) | second live model to compare with Groq | now |
 | U2 | **Decide where to deploy** (FalkorDB Cloud + Render/Railway/Fly, or one VPS with Docker Compose) and have the account ready | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
-| U3 | **Push to GitHub and make the repo public.** Remote `origion` → `rushibhosalepro/steward` exists, but nothing is pushed (and it's spelled `origion`, not `origin`) | rule 10: a public source repo | before deploy |
+| U3 | ~~Push to GitHub and make the repo public~~ ✅ **done Thu 13:00**: [github.com/rushibhosalepro/steward](https://github.com/rushibhosalepro/steward), public, `main` tracks `origin/main` | rule 10: a public source repo | done |
 | U4 | **Ask on Discord:** judging criteria, blog-post prize rules, kickoff date | the paying axis is still a guess without criteria | Thu |
 | U5 | Register / team up in the WeMakeDevs panel and look at the **submission form fields** | may ask for things not on any public page | Fri |
 | U6 | Record the **video** (your voice); post the **blog** under your name | rule 13: meaningful participant contribution | Sat–Sun |

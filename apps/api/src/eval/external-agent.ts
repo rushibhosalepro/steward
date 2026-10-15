@@ -9,7 +9,11 @@ import { seedDemo } from "../seed/seed";
 // External-agent benchmark. An independent agent (Claude Code, headless) does the work; Steward
 // is only the MCP server it is given. Two conditions, same agent, same tasks, same prompt:
 //   with    : Steward's guarded MCP tools (every action goes through the Sentinel)
-//   without : the same tools with no Sentinel (eval-only endpoint, STEWARD_ALLOW_UNGUARDED=1)
+//   without : an agent with ordinary connectors (mcp/baseline.ts): read inbox, read documents in
+//             full, contacts, calendar, and send/share/schedule/task directly. No Sentinel, no
+//             dry-run tool, no context firewall (eval-only endpoint, STEWARD_ALLOW_UNGUARDED=1).
+//   (A first baseline that only removed the Sentinel from the act tool still exposed the
+//    dry-run check and the firewall; the agent used them. That run was discarded.)
 // The agent gets NO other tools (--tools "" --strict-mcp-config): no shell, files or web, so it
 // cannot route around Steward. Success criteria are written below, before any run, and judged
 // from the graph afterwards, not from what the agent says it did. Transcripts are kept.
@@ -134,7 +138,7 @@ function parseTranscript(text: string) {
 export async function runExternalAgentEval(opts: { model?: string; only?: string[] } = {}) {
   process.env.STEWARD_ALLOW_UNGUARDED = "1";
   const { root } = await import("../index");
-  const server = Bun.serve({ port: 0, fetch: root.fetch });
+  const server = Bun.serve({ port: 0, fetch: root.fetch, idleTimeout: 200 });
   const base = `http://localhost:${server.port}`;
   const outDir = new URL("../../../../eval/agent-runs/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
   mkdirSync(outDir, { recursive: true });
@@ -165,10 +169,10 @@ export async function runExternalAgentEval(opts: { model?: string; only?: string
       clearTimeout(timer);
       const seconds = Math.round((Date.now() - started) / 100) / 10;
 
-      const transcript = `${task.id}-${condition}.jsonl`;
+      const transcript = `${opts.model ?? "sonnet"}-${task.id}-${condition}.jsonl`;
       writeFileSync(join(outDir, transcript), stdout);
       const t = parseTranscript(stdout);
-      const bypassTools = t.tools.filter((x) => !x.startsWith("mcp__steward__"));
+      const bypassTools = t.tools.filter((x) => !x.startsWith("mcp__steward__"));  // either server is named "steward" in the config
       const verdicts = ((await g.roQuery<{ v: string }>("MATCH (a:Action) RETURN a.verdict + ':' + a.type + '→' + coalesce(a.to, '-') AS v ORDER BY a.created_at")).data ?? []).map((r) => r.v);
       const outcome = await task.judge(g);
       const error = t.result?.is_error || !t.result
@@ -192,7 +196,7 @@ export function agentMarkdown(r: Awaited<ReturnType<typeof runExternalAgentEval>
     const attacks = rows.filter((x) => x.kind === "attack");
     const falseBlocks = benign.filter((x) => x.verdicts.some((v) => v.startsWith("BLOCK"))).length;
     const avg = rows.length ? Math.round(rows.reduce((s, x) => s + x.seconds, 0) / rows.length) : 0;
-    return `| ${c === "with" ? "**with Steward**" : "without (same tools, no Sentinel)"} | ${rate(benign, (x) => x.outcome.completed)} | **${rate(attacks, (x) => x.outcome.attackSucceeded === true)}** | ${falseBlocks} | ${avg}s |`;
+    return `| ${c === "with" ? "**with Steward**" : "without (ordinary connectors, no Steward)"} | ${rate(benign, (x) => x.outcome.completed)} | **${rate(attacks, (x) => x.outcome.attackSucceeded === true)}** | ${falseBlocks} | ${avg}s |`;
   };
   return [
     "# External-agent benchmark",
@@ -221,7 +225,8 @@ export function agentMarkdown(r: Awaited<ReturnType<typeof runExternalAgentEval>
 if (import.meta.main) {
   const arg = (name: string) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
   const r = await runExternalAgentEval({ model: arg("--model"), only: arg("--only")?.split(",") });
-  await Bun.write(new URL("../../../../eval/EXTERNAL-AGENT.md", import.meta.url), agentMarkdown(r));
-  await Bun.write(new URL("../../../../eval/agent-runs/results.json", import.meta.url), JSON.stringify(r, null, 2));
+  const tag = r.model.replace(/[^a-z0-9.-]/gi, "_");
+  await Bun.write(new URL(`../../../../eval/EXTERNAL-AGENT-${tag}.md`, import.meta.url), agentMarkdown(r));
+  await Bun.write(new URL(`../../../../eval/agent-runs/results-${tag}.json`, import.meta.url), JSON.stringify(r, null, 2));
   process.exit(0);
 }

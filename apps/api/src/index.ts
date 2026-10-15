@@ -13,6 +13,7 @@ import { decide, getAction, isProposedAction, listActions, listInbox, proposeAct
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
 import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
+import { createBaselineMcpServer } from "./mcp/baseline";
 import { createMcpServer } from "./mcp/server";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
@@ -185,7 +186,7 @@ for (const decision of ["dismiss", "accept", "decline"] as const) {
 if (process.env.STEWARD_ALLOW_UNGUARDED === "1") {
   app.all("/users/:id/mcp-unguarded", async (c) => {
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    await createMcpServer(c.req.param("id"), { guarded: false }).connect(transport);
+    await createBaselineMcpServer(c.req.param("id")).connect(transport);
     return transport.handleRequest(c.req.raw);
   });
 }

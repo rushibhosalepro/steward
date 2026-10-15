@@ -51,8 +51,8 @@ export async function runOpenAIAgent(spec: string, mcpUrl: string, prompt: strin
   const cfg = parseAgentModel(spec)!;
   const out: object[] = [];
   const client = new Client({ name: "steward-eval-agent", version: "1.0.0" });
-  await client.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));
   try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));
     const { tools: listed } = await client.listTools();
     const tools = listed.map((t) => {
       const { $schema: _s, ...parameters } = t.inputSchema as Record<string, unknown>;

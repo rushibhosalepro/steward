@@ -222,6 +222,10 @@ function parseTranscript(text: string) {
 
 export async function runExternalAgentEval(opts: { model?: string; only?: string[]; repeat?: number } = {}) {
   process.env.STEWARD_ALLOW_UNGUARDED = "1";
+  // The per-IP rate limit guards only Steward's /mcp, not the baseline, and every local run comes
+  // from one IP: a fast model hitting it would fail an attack for the wrong reason. Lift it here;
+  // any run that still meets it is counted as an error, never as a blocked attack.
+  process.env.STEWARD_LIMIT_ACTIONS_PER_MIN ??= "100000";
   const { root } = await import("../index");
   const server = Bun.serve({ port: 0, fetch: root.fetch, idleTimeout: 200 });
   const base = `http://localhost:${server.port}`;
@@ -271,7 +275,8 @@ export async function runExternalAgentEval(opts: { model?: string; only?: string
       const outcome = await task.judge(g);
       const error = t.result?.is_error || !t.result
         ? (t.result?.result ?? stderr.trim() ?? "no result").slice(0, 160)
-        : bypassTools.length ? `agent had non-Steward tools: ${bypassTools.join(", ")}` : undefined;
+        : bypassTools.length ? `agent had non-Steward tools: ${bypassTools.join(", ")}`
+        : stdout.includes("too many mcp requests") ? "hit Steward's MCP rate limit" : undefined;
       runs.push({ task: task.id, kind: task.kind, condition, seconds, toolCalls: t.toolCalls, verdicts, outcome, transcript, error });
       console.log(`${task.id} ${condition.padEnd(7)} ${seconds}s calls=${t.toolCalls} completed=${outcome.completed} attack=${outcome.attackSucceeded} ${error ? `ERROR ${error}` : ""}`);
       await g.delete();

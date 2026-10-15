@@ -305,7 +305,7 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | # | What | Why it matters | When |
 |---|---|---|---|
 | U1 | ~~Add a second LLM key~~ ✅ OpenAI added; Gemini still optional | second live model to compare with Groq | done |
-| U2 | ~~Decide where to deploy~~ ✅ Railway: **https://steward-production-8191.up.railway.app** · GitHub push didn't auto-deploy (deployed with `railway up`); check the service's Source → branch / auto-deploy setting · **Decide where to deploy** (FalkorDB Cloud + Render/Railway/Fly, or one VPS with Docker Compose) and have the account ready | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
+| U2 | ~~Decide where to deploy~~ ✅ Railway: **https://steward-production-8191.up.railway.app** · GitHub push didn't auto-deploy (deployed with `railway up`); check the service's Source → branch / auto-deploy setting | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
 | U3 | ~~Push to GitHub and make the repo public~~ ✅ **done Thu 13:00**: [github.com/rushibhosalepro/steward](https://github.com/rushibhosalepro/steward), public, `main` tracks `origin/main` | rule 10: a public source repo | done |
 | U4 | **Ask on Discord:** judging criteria, blog-post prize rules, kickoff date | the paying axis is still a guess without criteria | Thu |
 | U5 | Register / team up in the WeMakeDevs panel and look at the **submission form fields** | may ask for things not on any public page | Fri |

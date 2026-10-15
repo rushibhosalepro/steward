@@ -26,6 +26,7 @@ const SAMPLE_MAIL = [
 const CHECK_LABEL: Record<string, string> = {
   known_recipient: "Known recipient",
   information_flow: "Information flow",
+  content_flow: "What the text gives away",
   provenance: "Who asked for this",
   calendar: "Calendar",
   standing_rule: "Standing rule",

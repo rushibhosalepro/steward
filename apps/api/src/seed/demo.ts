@@ -1,7 +1,7 @@
 // Synthetic demo world for user "Asha". Every person, email and document here is invented
 // (rule 6: no real personal data). Times are relative to `now` so "tomorrow" always works.
 
-type Props = Record<string, string | number | boolean>;
+type Props = Record<string, string | number | boolean | string[]>;
 export type SeedNode = { label: string; id: string; props: Props };
 export type SeedEdge = { from: string; type: string; to: string; props?: Props };
 
@@ -42,6 +42,16 @@ export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdg
     n("Document", "d:atlas-pricing", { title: "Atlas pricing sheet", sensitivity: "restricted", updated_at: now - 3 * DAY }),
     n("Document", "d:orbit-roadmap", { title: "Orbit roadmap", sensitivity: "internal", updated_at: now - 5 * DAY }),
     n("Document", "d:trip-itinerary", { title: "Goa itinerary", sensitivity: "public", updated_at: now - 2 * DAY }),
+
+    // What the documents say. Markers are the strings that give a fact away in a message, so the
+    // Sentinel can catch a leak through a summary, not only through an attachment. A fact
+    // carries its document's sensitivity.
+    n("Fact", "f:pricing-tier", { text: "Atlas Enterprise tier is $48,000 per year", markers: ["$48,000", "48,000", "48000", "48k"], sensitivity: "restricted" }),
+    n("Fact", "f:pricing-floor", { text: "Lowest approved Atlas discount is 22%", markers: ["22%", "22 percent", "22 per cent"], sensitivity: "restricted" }),
+    n("Fact", "f:atlas-launch-v2", { text: "Atlas launch moves to 2 December", markers: ["2 december", "december 2", "dec 2"], sensitivity: "internal" }),
+    n("Fact", "f:atlas-launch-v1", { text: "Atlas launch planned for 18 November", markers: ["18 november", "november 18", "nov 18"], sensitivity: "internal" }),
+    n("Fact", "f:orbit-api", { text: "Orbit API v2 ships in Q1 2027", markers: ["orbit api v2", "api v2"], sensitivity: "internal" }),
+    n("Fact", "f:trip-hotel", { text: "Goa hotel is Casa Mar, 12-15 November", markers: ["casa mar"], sensitivity: "public" }),
 
     // Calendar
     n("Meeting", "m:priya-sync", { title: "Atlas sync with Priya", start: tomorrowAt(now, 11), end: tomorrowAt(now, 12), status: "confirmed" }),
@@ -93,6 +103,12 @@ export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdg
     e("d:atlas-pricing", "SHARED_WITH", "p:rahul"),
     e("d:orbit-roadmap", "BELONGS_TO", "pr:orbit"),
     e("d:trip-itinerary", "BELONGS_TO", "pr:trip"),
+    e("d:atlas-pricing", "CONTAINS", "f:pricing-tier"),
+    e("d:atlas-pricing", "CONTAINS", "f:pricing-floor"),
+    e("d:atlas-update-v2", "CONTAINS", "f:atlas-launch-v2"),
+    e("d:atlas-update-v1", "CONTAINS", "f:atlas-launch-v1"),
+    e("d:orbit-roadmap", "CONTAINS", "f:orbit-api"),
+    e("d:trip-itinerary", "CONTAINS", "f:trip-hotel"),
 
     // Calendar
     e("m:priya-sync", "WITH", "p:priya"),

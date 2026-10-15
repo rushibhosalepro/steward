@@ -58,7 +58,10 @@ RETURN startNode(r).id AS from, type(r) AS rel, endNode(r).id AS to`,
 
   nodes: `MATCH (n:Entity) WHERE n.id IN $ids
 RETURN n.id AS id, [l IN labels(n) WHERE l <> 'Entity'][0] AS label,
-       coalesce(n.name, n.title, n.subject, n.what, n.id) AS name, properties(n) AS props`,
+       coalesce(n.name, n.title, n.subject, n.what, n.text, n.id) AS name, properties(n) AS props`,
+
+  facts: `MATCH (d:Document)-[r:CONTAINS]->(f:Fact) WHERE d.id IN $docs AND f.sensitivity IN ['public', 'internal']
+RETURN d.id AS from, type(r) AS rel, f.id AS to`,
 
   user: `MATCH (u:User) OPTIONAL MATCH (u)-[:PREFERS]->(p:Preference)
 RETURN u.name AS name, u.timezone AS timezone, collect({key: p.key, value: p.value}) AS preferences`,
@@ -87,14 +90,24 @@ export async function retrieve(g: Graph, request: string, k = 6): Promise<Contex
   const ids = entryPoints.map((e) => e.id);
   const edges = (await g.roQuery<ContextEdge>(Q.expand, { params: { ids, exclude: NOT_CONTEXT } })).data ?? [];
 
-  const nodeIds = [...new Set([...ids, ...edges.flatMap((e) => [e.from, e.to])])];
+  // What the documents in context say, so the planner can write a real update...
+  const docIds = [...new Set(edges.flatMap((e) => [e.from, e.to]).concat(ids))].filter((id) => id.startsWith("d:"));
+  const factEdges = (await g.roQuery<ContextEdge>(Q.facts, { params: { docs: docIds } })).data ?? [];
+
+  const nodeIds = [...new Set([...ids, ...edges.flatMap((e) => [e.from, e.to]), ...factEdges.map((e) => e.to)])];
   const rows = (await g.roQuery<ContextNode>(Q.nodes, { params: { ids: nodeIds } })).data ?? [];
-  const nodes = rows.map((n) => {
+
+  // ...except restricted ones. The context firewall: a restricted fact never reaches the model,
+  // however it was reached, so a hijacked planner has nothing to leak. (The Sentinel's
+  // content_flow check is the second line: it blocks the text if the fact gets out anyway.)
+  const withheld = new Set(rows.filter((n) => n.label === "Fact" && n.props.sensitivity !== "public" && n.props.sensitivity !== "internal").map((n) => n.id));
+  const nodes = rows.filter((n) => !withheld.has(n.id)).map((n) => {
     const { id: _id, ...props } = n.props;
     return { ...n, props };
   });
+  const allEdges = [...edges, ...factEdges.filter((f) => !edges.some((e) => e.from === f.from && e.to === f.to && e.rel === f.rel))];
 
-  return { terms, entryPoints, nodes, edges, user, cypher };
+  return { terms, entryPoints, nodes, edges: allEdges.filter((e) => !withheld.has(e.from) && !withheld.has(e.to)), user, cypher: [...cypher, Q.facts] };
 }
 
 // The compact text form the Planner gets in its prompt: nodes with their ids and key
@@ -109,10 +122,11 @@ export function renderContext(ctx: Context, now = Date.now()) {
   lines.push("", "nodes:");
   for (const n of ctx.nodes) {
     const props = Object.entries(n.props)
-      .filter(([k]) => !["name", "title"].includes(k))
+      .filter(([k]) => !["name", "title", "text", "markers"].includes(k))
       .map(([k, v]) => `${k}=${fmt(v)}`)
       .join(", ");
-    lines.push(`- [${n.id}] ${n.label} "${n.name}"${props ? ` (${props})` : ""}`);
+    const withheld = n.label === "Document" && n.props.sensitivity === "restricted" ? " [contents withheld: restricted]" : "";
+    lines.push(`- [${n.id}] ${n.label} "${n.name}"${props ? ` (${props})` : ""}${withheld}`);
   }
   lines.push("", "edges:");
   for (const e of ctx.edges) lines.push(`- ${e.from} -${e.rel}-> ${e.to}`);

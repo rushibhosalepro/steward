@@ -24,7 +24,7 @@ export type Status = "pass" | "ask" | "block" | "skip";
 export type Verdict = "ALLOW" | "ASK" | "BLOCK";
 
 export type CheckResult = {
-  check: "known_recipient" | "information_flow" | "provenance" | "calendar" | "standing_rule";
+  check: "known_recipient" | "information_flow" | "content_flow" | "provenance" | "calendar" | "standing_rule";
   status: Status;
   reason: string;
   evidence: string[];     // human-readable graph paths
@@ -48,6 +48,9 @@ OPTIONAL MATCH (d)-[:BELONGS_TO]->(pr:Project)<-[:MEMBER_OF]-(m:Person {email: $
 OPTIONAL MATCH (newer:Document)-[:SUPERSEDES]->(d)
 RETURN d.title AS title, d.sensitivity AS sensitivity, s.name AS sharedWith,
        pr.id AS projectId, pr.name AS project, m.name AS member, newer.title AS newer`,
+
+  facts: `MATCH (d:Document)-[:CONTAINS]->(f:Fact)
+RETURN f.id AS id, f.text AS text, f.markers AS markers, d.id AS doc, d.title AS title`,
 
   provenance: `MATCH (src:Entity {id: $id})
 OPTIONAL MATCH (src)-[:FROM]->(sender:Person)
@@ -125,6 +128,29 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
 
   const reason = reasons.length ? reasons.join("; ") : "every document reaches the recipient through the graph";
   return { ...base, status, reason, evidence, refs };
+}
+
+// Leaks through the text, not the attachment: a hijacked planner can type the price into the
+// email instead of attaching the pricing sheet. Every fact the text gives away is traced back
+// to its document, and the same path check decides whether that document may reach the
+// recipient. Anything someone else will read counts: subject, body, an invite's title.
+async function contentFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
+  const base = { check: "content_flow" as const, cypher: [Q.facts, Q.docFlow] };
+  const text = [a.subject, a.body, a.type === "create_event" ? a.title : undefined].filter(Boolean).join("\n").toLowerCase();
+  if (!a.to || !text.trim()) return { ...base, status: "skip", reason: "no text leaves your graph", evidence: [] };
+
+  const facts = (await g.roQuery<{ id: string; text: string; markers: string[]; doc: string; title: string }>(Q.facts)).data ?? [];
+  const found = facts
+    .map((f) => ({ ...f, marker: f.markers.find((m) => text.includes(m.toLowerCase())) }))
+    .filter((f): f is typeof f & { marker: string } => !!f.marker);
+  if (!found.length) return { ...base, status: "pass", reason: "the text gives away nothing from your documents", evidence: [] };
+
+  const flow = await informationFlow(g, { ...a, docs: [...new Set(found.map((f) => f.doc))] });
+  const gives = found.map((f) => `“${f.marker}” → ${f.text} ← CONTAINS ← ${f.title}`);
+  const reason = flow.status === "pass"
+    ? `the text mentions ${found.map((f) => `“${f.marker}”`).join(", ")}; the recipient may see where that comes from`
+    : `the text gives away ${found.map((f) => `“${f.text}”`).join(", ")}: ${flow.reason}`;
+  return { ...base, status: flow.status, reason, evidence: [...gives, ...flow.evidence], refs: [...found.map((f) => f.id), ...(flow.refs ?? [])] };
 }
 
 async function provenance(g: Graph, a: ProposedAction): Promise<CheckResult> {
@@ -207,6 +233,7 @@ export async function check(g: Graph, action: ProposedAction): Promise<SentinelR
   const checks = [
     await knownRecipient(g, a),
     await informationFlow(g, a),
+    await contentFlow(g, a),
     await provenance(g, a),
     await calendar(g, a),
     await standingRule(g, a),

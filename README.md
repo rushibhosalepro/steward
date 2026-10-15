@@ -9,7 +9,7 @@ A personal operator agent that lives entirely in a graph. FalkorDB is the only d
 
 ```
 apps/api      Bun + Hono backend, talks to FalkorDB (one graph per user)
-apps/web      (coming) approval inbox + "why did my agent do that?" panel
+apps/web      Vite + React UI: request box, approval inbox, activity, "why did my agent do that?" panel, outbox / calendar / tasks / rules
 packages/     shared types, later
 ```
 
@@ -21,7 +21,7 @@ Requires Bun ≥ 1.4 and Docker.
 bun install
 cp .env.example .env
 bun run db:up          # FalkorDB on :6379, FalkorDB Browser on http://localhost:3000
-bun run dev            # API on http://localhost:8787
+bun run dev            # API on http://localhost:8787 + UI on http://localhost:5173 (turbo runs both)
 curl localhost:8787/health
 curl localhost:8787/users/demo/ping
 curl -X POST localhost:8787/users/demo/seed   # load the synthetic demo world

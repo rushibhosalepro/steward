@@ -59,6 +59,8 @@ export async function planRequest(g: Graph, request: string, planner: Planner) {
     { params: { requestId, planId, summary: plan.summary, planner: planner.name, ts: now, entries: ctx.entryPoints.map((e) => e.id) } },
   );
 
+  const nameOf = new Map(ctx.nodes.map((n) => [n.id, n.name]));
+  const personByEmail = new Map(ctx.nodes.filter((n) => n.label === "Person").map((n) => [String(n.props.email), n.name]));
   const steps = [];
   for (const [i, planned] of plan.actions.entries()) {
     const proposed = await proposeAction(g, toProposed(planned, requestId, request), "a:planner");
@@ -71,7 +73,11 @@ export async function planRequest(g: Graph, request: string, planner: Planner) {
     steps.push({
       order: i + 1,
       rationale: planned.rationale,
-      action: { id: proposed.id, type: planned.type, to: planned.to, docs: planned.docs, title: planned.title, subject: planned.subject },
+      action: {
+        id: proposed.id, type: planned.type, to: planned.to, docs: planned.docs, title: planned.title, subject: planned.subject,
+        target: planned.to ? personByEmail.get(planned.to) ?? null : null,
+        docTitles: planned.docs.map((d) => nameOf.get(d) ?? d),
+      },
       verdict: proposed.verdict,
       reason: proposed.reason,
       status: execution?.ok ? "done" : execution ? execution.status : proposed.status,

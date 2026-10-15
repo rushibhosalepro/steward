@@ -87,6 +87,26 @@ export async function listInbox(g: Graph) {
   return res.data ?? [];
 }
 
+export type ActivityItem = InboxItem & { status: ActionStatus; verdict: Verdict; rationale: string | null; source: string | null };
+
+// Every action, newest first: the activity feed (what ran, what's waiting, what was blocked).
+export async function listActions(g: Graph, limit = 50) {
+  const res = await g.roQuery<ActivityItem>(
+    `MATCH (a:Action)
+     OPTIONAL MATCH (a)-[:TARGETS]->(p:Person)
+     OPTIONAL MATCH (a)-[:USES]->(d:Document)
+     OPTIONAL MATCH (s:Step)-[:PROPOSES]->(a)
+     OPTIONAL MATCH (a)-[:DERIVED_FROM]->(src)
+     RETURN a.id AS id, a.type AS type, a.status AS status, a.verdict AS verdict, a.reason AS reason,
+            a.created_at AS created_at, a.to AS to, p.name AS target, collect(d.title) AS docs,
+            a.subject AS subject, a.title AS title, s.rationale AS rationale,
+            [l IN labels(src) WHERE l <> 'Entity'][0] AS source
+     ORDER BY created_at DESC LIMIT $limit`,
+    { params: { limit } },
+  );
+  return res.data ?? [];
+}
+
 export async function getAction(g: Graph, id: string) {
   const res = await g.roQuery<{ a: { properties: Record<string, unknown> } }>("MATCH (a:Action {id: $id}) RETURN a", { params: { id } });
   const node = res.data?.[0]?.a;
@@ -104,6 +124,13 @@ export async function getAction(g: Graph, id: string) {
      RETURN [l IN labels(s) WHERE l <> 'Entity'][0] AS label, coalesce(s.subject, s.text, s.id) AS text`,
     { params: { id } },
   );
+  const named = await g.roQuery<{ target: string | null; docTitles: string[] }>(
+    `MATCH (a:Action {id: $id})
+     OPTIONAL MATCH (a)-[:TARGETS]->(p:Person)
+     OPTIONAL MATCH (a)-[:USES]->(d:Document)
+     RETURN p.name AS target, collect(d.title) AS docTitles`,
+    { params: { id } },
+  );
   const decisions = await g.roQuery<{ decision: string; note: string | null; ts: number }>(
     "MATCH (ap:Approval)-[:ON]->(a:Action {id: $id}) RETURN ap.decision AS decision, ap.note AS note, ap.ts AS ts ORDER BY ts",
     { params: { id } },
@@ -111,6 +138,8 @@ export async function getAction(g: Graph, id: string) {
 
   return {
     ...props,
+    target: named.data?.[0]?.target ?? null,
+    docTitles: named.data?.[0]?.docTitles ?? [],
     checks: JSON.parse(String(checks ?? "[]")) as CheckResult[],
     derivedFrom: source.data?.[0] ?? null,
     justifiedBy: why.data ?? [],

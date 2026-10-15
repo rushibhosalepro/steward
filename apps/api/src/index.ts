@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
-import { decide, getAction, isProposedAction, listInbox, proposeAction } from "./actions/actions";
+import { decide, getAction, isProposedAction, listActions, listInbox, proposeAction } from "./actions/actions";
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
 import { choosePlanner, planRequest } from "./planner/plan";
@@ -61,6 +61,9 @@ app.post("/users/:id/actions", async (c) => {
 
 // The approval inbox: every action the Sentinel answered with ASK.
 app.get("/users/:id/inbox", async (c) => c.json(await listInbox(graphFor(c.req.param("id")))));
+
+// The activity feed: every action, newest first.
+app.get("/users/:id/actions", async (c) => c.json(await listActions(graphFor(c.req.param("id")))));
 
 // One action with everything the "why" panel needs.
 app.get("/users/:id/actions/:actionId", async (c) => {

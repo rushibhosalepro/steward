@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { graphFor } from "../db";
 import { seedDemo } from "../seed/seed";
-import { decide, getAction, listInbox, proposeAction } from "./actions";
+import { decide, getAction, listActions, listInbox, proposeAction } from "./actions";
 
 const graph = graphFor("test_actions");
 const PRIYA = "priya@northwind.example";
@@ -89,5 +89,15 @@ describe("restraint", () => {
     const r = await proposeAction(graph, { type: "send_email", to: "someone@new.example", derivedFrom: "user" });
     expect(await decide(graph, r.id, "rejected")).toEqual({ ok: true, status: "rejected" });
     expect(await decide(graph, "act:nope", "approved")).toEqual({ ok: false, code: 404, error: "no such action" });
+  });
+});
+
+describe("activity feed", () => {
+  test("lists every action, newest first, with status, verdict and source", async () => {
+    const all = await listActions(graph);
+    expect(all.length).toBeGreaterThanOrEqual(4);
+    expect(all[0]!.created_at).toBeGreaterThanOrEqual(all[all.length - 1]!.created_at);
+    const blocked = all.find((a) => a.status === "blocked");
+    expect(blocked).toMatchObject({ verdict: "BLOCK", source: "Message", target: "Alex Chen" });
   });
 });

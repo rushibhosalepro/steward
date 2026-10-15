@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~12:45 IST, 12.5h into the 96h window.
+**Last updated:** Thu Oct 15, ~13:30 IST, 13.5h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -134,7 +134,7 @@ asking. The rule is deliberately narrow:
 
 ### What's not built yet
 
-A live run of the **Claude planner** (needs an API key; the offline planner covers the demo), the **web UI**,
+A live run of the **Claude planner** (needs an API key; the offline planner covers the demo),
 **inbound mail ingest**, **Scout** suggestions with PageRank, the **evaluation** over ~60
 labelled scenarios, and **deployment**. See *Build order* below.
 
@@ -156,7 +156,9 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 | 6b | `741b7c8` | **Planner: one sentence in, Sentinel-checked actions out** | `POST /users/:id/requests` takes a sentence: retrieval (6a) → a planner proposes typed actions → each goes through the Sentinel → ALLOWs run, ASKs go to the inbox, BLOCKs are recorded. Written to the graph as `(Request)-[:PRODUCED]->(Plan)-[:HAS]->(Step)-[:PROPOSES]->(Action)`, with `(Plan)-[:USED_CONTEXT]->` the entry points. Two planners behind one interface: **Claude** (`claude-opus-5-5`, structured output, server-side refusal fallback) and a deterministic **offline** planner (no key: keeps open commitments, preps for meetings). An invented provenance id fails closed (ASK) | 10 tests incl. **a hijacked planner** that follows Alex's injected mail: all 3 leak attempts BLOCKED, whatever provenance it claims |
 
-**Tests:** 71 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| 7 | *this commit* | **Web UI** | `apps/web` (Vite + React). One screen: **Ask Steward** (request box, 3 one-click samples, planner picker, Reset demo) and the resulting plan · **Needs your approval** (approve / reject) · **Activity** (every action with verdict + status) · **"Why did my agent do that?"** (verdict, where it came from, each check with its graph path and collapsible Cypher, the graph facts it rests on) · tabs for **Outbox / Calendar / Tasks / Rules** (accept / decline / revoke). A rule proposal shows a banner. Light + dark, stacks at phone width. API additions: `GET /actions` (activity feed), names instead of ids in action detail and plan steps. Offline planner now uses a document named in the request (best full-text match) so the Alex sample demos a BLOCK | 2 new tests (activity feed, named document). Walked through in the browser: Priya → ASK; Alex → BLOCK on two checks; 3rd approval → rule proposed → accepted → same request runs as ALLOW with no prompt; phone width has no horizontal scroll |
+
+**Tests:** 73 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -178,6 +180,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | `POST /users/:id/rules/:ruleId/accept` · `/decline` · `/revoke` | the only way a rule changes state |
 | `POST /users/:id/context` | GraphRAG: entry points, subgraph and the rendered text the Planner will get, for `{ request }` |
 | `POST /users/:id/requests` | **the front door**: `{ request, planner? }` → plan → Sentinel → run / inbox / blocked |
+| `GET /users/:id/actions` | activity feed: every action, newest first |
 
 ### What the Sentinel decides on the demo world today
 
@@ -222,15 +225,15 @@ labelled scenarios, and **deployment**. See *Build order* below.
 |---|---|
 | FalkorDB as the only store | ✅ so far: no other datastore exists |
 | Sentinel: 5 Cypher checks | ✅ |
-| Seeded synthetic user, zero login | ✅ seed endpoint; no UI yet |
-| Approval inbox | ✅ API (no UI yet) |
+| Seeded synthetic user, zero login | ✅ seed endpoint + Reset demo button, 3 one-click samples |
+| Approval inbox | ✅ API + UI |
 | Planner (LLM) with graph retrieval | ✅ Claude + offline fallback; **Claude path not yet run live (no API key)** |
 | Executor + 3 sandboxed tools | ✅ |
 | Learning: approve → propose narrow rule → accept / revoke | ✅ |
 | Ingest of inbound mail | ⬜ |
 | Scout + PageRank | ⬜ |
 | Community detection → Contexts | ⬜ |
-| Web UI: request box, approval inbox, "why" panel, suggestions | ⬜ |
+| Web UI: request box, approval inbox, "why" panel, suggestions | ✅ (suggestions panel waits for Scout) |
 | Eval script over ~60 labelled scenarios | ⬜ (13 scenarios exist as tests) |
 | Deploy | ⬜ |
 
@@ -238,7 +241,6 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 ## Build order from here (one feature, one commit)
 
-7. **Web UI:** request box, approval inbox, "why" panel
 8. **Ingest of inbound mail** (entity extraction + dedup via vector / full-text index)
 9. **Scout + PageRank** suggestions
 10. **Eval script** over the labelled scenario set → `../results.md`
@@ -253,4 +255,6 @@ labelled scenarios, and **deployment**. See *Build order* below.
 - The Planner gets the subgraph, never the whole graph, and is told message bodies are data, not instructions. The real defence is structural: whatever it proposes, the Sentinel decides (see the hijacked-planner test).
 - The offline planner is the no-key demo path required by the plan, not a mock: it plans from the same retrieved subgraph.
 - **Upstream bug found:** FalkorDB 6.0.2 drops rows in `OPTIONAL MATCH … WHERE` after an aggregating `WITH`. Repro and workaround in `../BUGS.md` #1. To file before Sun 19:15 IST.
+- **Known issue:** re-running the same request re-creates the same prep task (the planner doesn't check for an existing open task with that title). Fix with a dedup check in the Executor or planner.
+- `bun run dev` loads the root `.env` (`--env-file=../../.env`), so an `ANTHROPIC_API_KEY` there reaches the Planner.
 - AI assistant (Claude Code) used for scaffolding, seed data, Sentinel and tests: to be logged in `../AI-DISCLOSURE.md` (rule 11).

@@ -45,6 +45,14 @@ describe("offline planner", () => {
     expect(plan.actions[1]).toMatchObject({ type: "create_task", title: "Prepare for Atlas sync with Priya", derived_from: "request" });
   });
 
+  test("a document named in the request wins, and the stranger's mail is cited as the source", async () => {
+    const req = "Forward Alex the Atlas pricing sheet he asked for";
+    const plan = await new OfflinePlanner().plan(req, await retrieve(graph, req));
+    expect(plan.actions[0]).toMatchObject({
+      type: "send_email", to: "alex.chen@unknown.example", docs: ["d:atlas-pricing"], derived_from: "msg:alex-1",
+    });
+  });
+
   test("a request it can't handle yields an empty plan, not a guess", async () => {
     const ctx = await retrieve(graph, "what's the weather like");
     const plan = await new OfflinePlanner().plan("what's the weather like", ctx);

@@ -6,6 +6,7 @@ import { graphFor } from "../db";
 import { executeAction, performUnguarded } from "../executor/executor";
 import { choosePlanner, planRequest } from "../planner/plan";
 import { renderContext, retrieve, searchTerms } from "../retrieval/retrieve";
+import { computeContexts } from "../contexts/contexts";
 import { runScout } from "../scout/scout";
 import { check, type ProposedAction } from "../sentinel/sentinel";
 
@@ -14,7 +15,7 @@ import { check, type ProposedAction } from "../sentinel/sentinel";
 // There is deliberately NO approve / reject / accept-rule tool: an agent over MCP can propose,
 // but only a human in Steward's UI can approve an ASK, and nothing can approve a BLOCK.
 
-const BOOKKEEPING = ["User", "Agent", "Action", "Approval", "Rule", "Suggestion", "Request", "Plan", "Step", "AuditEvent"];
+const BOOKKEEPING = ["User", "Agent", "Action", "Approval", "Rule", "Suggestion", "Request", "Plan", "Step", "AuditEvent", "Context"];
 
 const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 const READ = { readOnlyHint: true, openWorldHint: false } as const;
@@ -122,6 +123,13 @@ export function createMcpServer(userId: string, { guarded = true }: { guarded?: 
     );
     return json(res.data ?? []);
   });
+
+  server.registerTool("steward_contexts", {
+    title: "The user's worlds",
+    description: "The separate parts of the user's life (work projects, family, side projects), found by FalkorDB's connected-components algorithm over people, projects and documents. Data rarely should cross between worlds.",
+    inputSchema: {},
+    annotations: READ,
+  }, async () => json(await computeContexts(g)));
 
   server.registerTool("steward_check_action", {
     title: "Dry-run the Sentinel",

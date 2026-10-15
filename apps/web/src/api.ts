@@ -114,6 +114,7 @@ export const api = {
   paused: () => call<{ paused: boolean }>("/pause"),
   setPaused: (paused: boolean) => post<{ paused: boolean }>("/pause", { paused }),
   audit: () => call<{ ok: boolean; length: number; brokenAt?: number; reason?: string }>("/audit/verify"),
+  contexts: () => call<{ id: string; name: string; people: string[]; documents: string[] }[]>("/contexts"),
   suggestions: () => call<Suggestion[]>("/suggestions"),
   decideSuggestion: (id: string, decision: "dismiss" | "accept" | "decline") => post(`/suggestions/${id}/${decision}`),
 };

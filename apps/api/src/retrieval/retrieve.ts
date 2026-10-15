@@ -13,7 +13,7 @@ const STOPWORDS = new Set(
     "which who will with would you your about before after send prepare make get tomorrow today").split(" "),
 );
 
-const NOT_CONTEXT = ["User", "Agent", "Action", "Approval", "Rule", "Request", "Plan", "Step", "Suggestion", "AuditEvent", "Session", "Turn"];
+const NOT_CONTEXT = ["User", "Agent", "Action", "Approval", "Rule", "Request", "Plan", "Step", "Suggestion", "AuditEvent", "Session", "Turn", "Context"];
 
 export type ContextNode = { id: string; label: string; name: string; props: Record<string, unknown> };
 export type ContextEdge = { from: string; rel: string; to: string };

@@ -78,6 +78,7 @@ export function App() {
   const [sessionId] = useState(() => crypto.randomUUID());
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [paused, setPaused] = useState(false);
+  const [worlds, setWorlds] = useState<{ id: string; name: string; people: string[]; documents: string[] }[]>([]);
   const [audit, setAudit] = useState<{ ok: boolean; length: number; brokenAt?: number; reason?: string } | null>(null);
   const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [calendar, setCalendar] = useState<Meeting[]>([]);
@@ -88,8 +89,8 @@ export function App() {
       api.actions(), api.inbox(), api.rules(), api.outbox(), api.calendar(), api.tasks(), api.mail(), api.suggestions(),
     ]);
     setActivity(a); setInbox(i); setRules(r); setOutbox(o); setCalendar(c); setTasks(t); setMail(m); setSuggestions(sg);
-    const [p, au] = await Promise.all([api.paused(), api.audit()]);
-    setPaused(p.paused); setAudit(au);
+    const [p, au, w] = await Promise.all([api.paused(), api.audit(), api.contexts()]);
+    setPaused(p.paused); setAudit(au); setWorlds(w);
   }, []);
 
   const guard = useCallback(async (fn: () => Promise<void>) => {
@@ -211,6 +212,19 @@ export function App() {
                 {ingested.flagged && <div className="warn">⚠ A stranger is asking for something. Flagged; nothing is owed.</div>}
               </div>
             )}
+          </div>
+
+          <div className="card">
+            <h2>Your worlds <span className="muted small">· connected components in your graph</span></h2>
+            <ul className="list">
+              {worlds.map((w) => (
+                <li key={w.id} className="plain small">
+                  <b>{w.name}</b> <span className="muted">{w.people.join(", ") || "no people"}</span>
+                  {w.documents.length > 0 && <div className="muted">{w.documents.join(" · ")}</div>}
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">Documents don't cross worlds without a path in the graph.</p>
           </div>
 
           {plan && (

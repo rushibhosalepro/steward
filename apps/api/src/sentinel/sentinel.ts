@@ -1,4 +1,5 @@
 import type { Graph } from "falkordb";
+import { worldOf } from "../contexts/contexts";
 
 // The Sentinel decides whether a proposed action may run. It is deterministic: every
 // verdict comes from Cypher over the user's graph plus the fixed policy below. The LLM
@@ -137,6 +138,12 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
     } else {
       status = "block";
       reasons.push(`no path from "${d.title}" to ${a.to}: they are not on its project`);
+      // Explanation only (the verdict above doesn't depend on it): which worlds the two are in.
+      const pid = (await g.roQuery<{ id: string }>("MATCH (p:Person {email: $email}) RETURN p.id AS id", { params: { email: a.to } })).data?.[0]?.id;
+      const worlds = await worldOf(g, [doc, ...(pid ? [pid] : [])]);
+      if (worlds.get(doc)) {
+        evidence.push(`${d.title} is in your "${worlds.get(doc)}" world; ${a.to} is ${pid && worlds.get(pid) ? `in your "${worlds.get(pid)}" world` : "in none of them"}`);
+      }
     }
 
     if (d.newer) {

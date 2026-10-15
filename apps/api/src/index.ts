@@ -15,6 +15,7 @@ import { decideRule, listRules } from "./rules/rules";
 import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
 import { createBaselineMcpServer } from "./mcp/baseline";
 import { authUrl, disconnect, googleConfigured, googleStatus, handleCallback } from "./connectors/google";
+import { computeContexts } from "./contexts/contexts";
 import { createMcpServer } from "./mcp/server";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
@@ -75,9 +76,10 @@ app.get("/users/:id/ping", async (c) => {
   return c.json({ ok: true, last_seen: res.data?.[0]?.at });
 });
 
-// Reset the user's graph to the synthetic demo world.
+// Reset the user's graph to the synthetic demo world (and recompute its worlds).
 app.post("/users/:id/seed", async (c) => {
   const counts = await seedDemo(graphFor(c.req.param("id")));
+  await computeContexts(graphFor(c.req.param("id")));
   return c.json({ ok: true, ...counts });
 });
 
@@ -230,6 +232,9 @@ app.post("/users/:id/pause", async (c) => {
 });
 app.get("/users/:id/audit/verify", async (c) => c.json(await verifyAudit(graphFor(c.req.param("id")))));
 
+// Your worlds: connected components (algo.WCC) over people, projects and documents.
+app.get("/users/:id/contexts", async (c) => c.json(await computeContexts(graphFor(c.req.param("id")))));
+
 // The sandboxed tools' state, read straight from the graph.
 app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.param("id")))));
 app.get("/users/:id/calendar", async (c) => c.json(await calendarView(graphFor(c.req.param("id")))));
@@ -249,6 +254,7 @@ if (existsSync(WEB_DIST)) {
 // A fresh database (first deploy) gets the synthetic demo user, so the demo works with no setup.
 if (process.env.STEWARD_SEED_DEMO !== "0" && !(await db.list()).includes("user_demo")) {
   await seedDemo(graphFor("demo"));
+  await computeContexts(graphFor("demo"));
   console.log("seeded the demo user");
 }
 

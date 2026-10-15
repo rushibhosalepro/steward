@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, 13:40 IST · 13.5h into the 96h window · 156 tests passing · **live: https://steward-production-8191.up.railway.app** · what's left: [**What's remaining**](#whats-remaining) at the end.
+**Last updated:** Thu Oct 15, 13:40 IST · 13.5h into the 96h window · 161 tests passing · **live: https://steward-production-8191.up.railway.app** · what's left: [**What's remaining**](#whats-remaining) at the end.
 
 | Gate (from `../CHECKLIST.md`) | Due | Status |
 |---|---|---|
@@ -212,7 +212,10 @@ See [**What's remaining**](#whats-remaining) at the end of this file.
 | sec 4 | `daaffb9` | **Hash-chained audit + kill switch** | every verdict / approval / execution / pause appends an `AuditEvent` (payload hash + previous hash, `NEXT`); `GET /audit/verify` detects edits and deletions; `POST /pause` stops the Executor | 4 tests: chain verifies, edit detected, deletion detected, pause/resume |
 | deploy | `7bc1373` · 13:35 | **Railway** | One service serves API + UI (API also under `/api`), seeded on first boot. FalkorDB as a private Railway service (password via reference variable, volume at `/var/lib/falkordb/data`, AOF on). Planner: OpenAI | live: UI, API, OpenAI plan, injection BLOCKED, audit verifies, MCP 10 tools |
 
-**Tests:** 156 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
+| limits | `09e8737` | **Public-demo abuse limits** | per-IP limits on `/requests` 6/min, `/seed` 3/min, `/mail` 10/min, `/actions` + `/mcp` 30/min (429 + Retry-After; GETs free); a daily LLM budget (default 300) past which planning degrades to offline with a note | 4 tests; live: 4th `/seed` in a minute → 429, Retry-After 59 |
+| adv eval | `21e9604` | **Adversarial evaluation, whole pipeline** | 16 attacks via a compromised planner, MCP, Executor and audit; each checks the verdict and the absence of the side effect. `bun run eval:security` → `eval/SECURITY.md` | **16/16 held**; found the volume self-count bug (cap was 2, now 3) |
+
+**Tests:** 161 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
 
 ### API
 
@@ -343,8 +346,8 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 
 | # | What | Notes |
 |---|---|---|
-| X1 | Eval: add the adversarial security batch (indirect leak, tainted request, scope abuse, bulk send, audit tamper, credential exposure) with labels written first | the ideas list from the security review |
+| X1 | ~~Eval: add the adversarial security batch~~ ✅ 16/16, `eval/SECURITY.md` · (indirect leak, tainted request, scope abuse, bulk send, audit tamper, credential exposure) with labels written first | the ideas list from the security review |
 | X2 | UI: pause button + "audit ✓ N events" in the header; labels exist for the new checks | endpoints exist |
 | X3 | README: security section — what's enforced (8 checks, firewall, capabilities, audit, kill switch) and what's honestly out of scope (no network tools exist; no separate policy service) | limits |
-| X4 | Public demo abuse: per-IP rate limit on `/requests` and `/seed` | cost + vandalism |
+| X4 | ~~Public demo abuse: rate limits~~ ✅ per-IP limits + daily LLM budget, live | done |
 

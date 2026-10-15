@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~13:30 IST, 13.5h into the 96h window.
+**Last updated:** Thu Oct 15, ~14:00 IST, 14h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -129,8 +129,9 @@ asking. The rule is deliberately narrow:
   rules) and *show the path* (`JUSTIFIED_BY` edges, paths and Cypher on every verdict).
 - **Restraint as the architecture:** the model will only ever propose. The graph decides,
   BLOCK is final, and rules never widen themselves.
-- **Tests as evidence:** 52 tests against a real FalkorDB, including the cases where acting
-  would be *wrong* (negative controls).
+- **Evidence:** a 63-scenario evaluation with 32 negative controls. First run: **0 unsafe actions
+  allowed**, every should-BLOCK case blocked, and the two misses it found were over-cautious and
+  are now fixed (`eval/RESULTS-first-run.md` is kept). 77 tests against a real FalkorDB.
 
 ### What's not built yet
 
@@ -158,7 +159,10 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 | 7 | `ce4cc1f` | **Web UI** | `apps/web` (Vite + React). One screen: **Ask Steward** (request box, 3 one-click samples, planner picker, Reset demo) and the resulting plan · **Needs your approval** (approve / reject) · **Activity** (every action with verdict + status) · **"Why did my agent do that?"** (verdict, where it came from, each check with its graph path and collapsible Cypher, the graph facts it rests on) · tabs for **Outbox / Calendar / Tasks / Rules** (accept / decline / revoke). A rule proposal shows a banner. Light + dark, stacks at phone width. API additions: `GET /actions` (activity feed), names instead of ids in action detail and plan steps. Offline planner now uses a document named in the request (best full-text match) so the Alex sample demos a BLOCK | 2 new tests (activity feed, named document). Walked through in the browser: Priya → ASK; Alex → BLOCK on two checks; 3rd approval → rule proposed → accepted → same request runs as ALLOW with no prompt; phone width has no horizontal scroll |
 
-**Tests:** 73 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| eval | `4d9ae09` | **Sentinel evaluation** | 63 labelled scenarios, labels from the stated policy (not from the Sentinel's output): routine-allow 16, routine-ask 10, **32 negative controls** (leaks 12, injected requests 10, unknown recipients 5, calendar conflicts 5), hard 5. Plus a **learning replay**. `bun run eval` → `eval/RESULTS.md`. A test locks in 0 unsafe allows | **First run: 0/63 unsafe allowed, 23/23 should-BLOCK blocked, 61/63 exact.** Learning: prompts per round 3 → 3 → 3 → 0 → 0 → 0, then 0 unsafe on the learned graph |
+| fix | `442d67b` | **Two over-cautious misses the eval found** | Email addresses compared case-insensitively (H02 had BLOCKED Priya written in different case); an event with no invitee passes the rule check like a task (A14). Labels unchanged | 3 tests; eval now 63/63 exact, 0 unsafe |
+
+**Tests:** 77 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -234,7 +238,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | Scout + PageRank | ⬜ |
 | Community detection → Contexts | ⬜ |
 | Web UI: request box, approval inbox, "why" panel, suggestions | ✅ (suggestions panel waits for Scout) |
-| Eval script over ~60 labelled scenarios | ⬜ (13 scenarios exist as tests) |
+| Eval script over ~60 labelled scenarios | ✅ 63 scenarios + learning replay; numbers in `../results.md` |
 | Deploy | ⬜ |
 
 ---
@@ -243,7 +247,6 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 8. **Ingest of inbound mail** (entity extraction + dedup via vector / full-text index)
 9. **Scout + PageRank** suggestions
-10. **Eval script** over the labelled scenario set → `../results.md`
 11. Community detection, shortest-path explanations, MCP (if time before the freeze)
 
 ## Notes and decisions

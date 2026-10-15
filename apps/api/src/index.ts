@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { isPaused, setPaused, verifyAudit } from "./audit/audit";
+import { limit, LIMITS, llmBudget } from "./limits/limits";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
 import { decide, getAction, isProposedAction, listActions, listInbox, proposeAction } from "./actions/actions";
@@ -18,6 +19,14 @@ import { decideSuggestion, runScout } from "./scout/scout";
 import { check } from "./sentinel/sentinel";
 
 const app = new Hono();
+
+// Per-IP limits on what costs money or changes state (POSTs only; reads are free).
+app.use("/users/:id/requests", limit("requests", LIMITS.requests));
+app.use("/users/:id/seed", limit("seed", LIMITS.seed));
+app.use("/users/:id/mail", limit("mail", LIMITS.mail));
+app.use("/users/:id/actions/*", limit("actions", LIMITS.actions));
+app.use("/users/:id/actions", limit("actions", LIMITS.actions));
+app.use("/users/:id/mcp", limit("mcp", LIMITS.actions));
 
 app.get("/health", async (c) => {
   const graphs = await db.list();
@@ -120,7 +129,7 @@ app.post("/users/:id/context", async (c) => {
 });
 
 // Which planners this server can run (offline always; LLM providers when their key is set).
-app.get("/planners", (c) => c.json({ available: availablePlanners(), default: process.env.STEWARD_PLANNER || "auto" }));
+app.get("/planners", (c) => c.json({ available: availablePlanners(), default: process.env.STEWARD_PLANNER || "auto", llmBudget: llmBudget.status() }));
 
 // The front door: a sentence in, a plan of Sentinel-checked actions out. ALLOWed actions run;
 // ASKs land in the inbox; BLOCKs are recorded. { planner?: "claude" | "offline" } overrides the default.

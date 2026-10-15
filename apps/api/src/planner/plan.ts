@@ -4,6 +4,7 @@ import { executeAction, type ExecResult } from "../executor/executor";
 import { renderContext, retrieve } from "../retrieval/retrieve";
 import type { ProposedAction } from "../sentinel/sentinel";
 import { ClaudePlanner } from "./claude";
+import { DailyBudget, llmBudget } from "../limits/limits";
 import { OfflinePlanner } from "./offline";
 import { OpenAICompatiblePlanner, PROVIDERS } from "./openai-compatible";
 import type { PlannedAction, Planner, PlanOutcome } from "./types";
@@ -31,11 +32,15 @@ export function availablePlanners(env: Env = process.env) {
 // An LLM planner wrapped so that any failure (bad key, network, output that won't validate)
 // falls back to the offline planner instead of failing the request. The plan says so.
 class WithFallback implements Planner {
-  constructor(private primary: Planner, private fallback: Planner = new OfflinePlanner()) {}
+  constructor(private primary: Planner, private fallback: Planner = new OfflinePlanner(), private budget: DailyBudget = llmBudget) {}
   get name() {
     return this.primary.name;
   }
   async plan(request: string, ctx: Context, rendered: string): Promise<PlanOutcome> {
+    if (!this.budget.take()) {
+      const plan = await this.fallback.plan(request, ctx, rendered);
+      return { ...plan, by: this.fallback.name, note: `today's LLM budget (${this.budget.status().cap} calls) is used up; used the ${this.fallback.name} planner` };
+    }
     try {
       return { ...(await this.primary.plan(request, ctx, rendered)), by: this.primary.name };
     } catch (err) {
@@ -48,6 +53,8 @@ class WithFallback implements Planner {
 
 // name: "auto" | "offline" | "claude" | a PROVIDERS key. Default from STEWARD_PLANNER, else auto:
 // Claude if configured, else the first configured provider, else offline.
+export { WithFallback };
+
 export function choosePlanner(name?: string, env: Env = process.env): Planner {
   const wanted = name || env.STEWARD_PLANNER || "auto";
   if (wanted === "offline") return new OfflinePlanner();

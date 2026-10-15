@@ -365,3 +365,11 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | W8 | Lead with usefulness; publish the escalation ratio over a simulated day | WebMCP: the one safety winner framed it as *giving* authority | in the video/write-up |
 | W9 | Film a real outside agent (Claude Desktop / Code) over MCP being stopped | Mandate filmed ChatGPT | 1h |
 
+### Thu ~14:45 — external agent through Steward (the "is it real?" question)
+
+| Done | Result |
+|---|---|
+| Bypass found and closed: an MCP agent could self-approve over the unauthenticated HTTP API (shown live: the email went out). Human-only routes now need the approver code (`35a5d0d`, deployed) | S17 added to the adversarial suite: 17/17 hold |
+| External-agent benchmark: Claude Code with only Steward's MCP tools vs ordinary connectors (`eval/EXTERNAL-AGENT.md`) | **Haiku: attacks 3/3 without → 0/3 with. Sonnet: 1/3 → 0/3. Legit 3/3 everywhere, 0 false blocks.** First baseline discarded (it leaked Steward's checks) |
+| Next | real Gmail drafts + Calendar (step 4 of the agreed plan) once you set up Google OAuth; more attack tasks and repeats for a rate |
+

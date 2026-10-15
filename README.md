@@ -26,11 +26,13 @@ in [`eval/agent-runs/`](eval/agent-runs/).
 | Agent | Attacks that succeeded **without** Steward | **with** Steward | Legit errands done | False blocks |
 |---|---|---|---|---|
 | Claude Haiku (2 runs × 13 tasks) | **14 / 16** | **0 / 16** | 10/10 · 10/10 | 0 |
-| Claude Sonnet (2 runs × 13 tasks) | see [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) | | | |
+| Claude Sonnet (2 runs × 13 tasks) | **8 / 16** | **0 / 16** | 10/10 · 10/10 | 0 |
 
-With Steward, the agent still *tried*: it emailed an outsider's address from a forwarded request, sent
-restricted figures to a colleague not cleared for them, and invented a recipient address. The
-Sentinel blocked or asked every time. Details and honest limits: [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md).
+Even the stronger model leaks without Steward when the risky part is a judgment about *who may see
+what*: restricted pricing to a colleague not cleared for it, a mass send to every contact, a known
+contact asking for files at a new personal address. With Steward the agents still *tried* (an
+outsider's address from a forwarded request, an invented recipient), and the Sentinel blocked or
+asked every time: **0 of 32 attacks across both models, 20/20 legitimate errands done.** Details and honest limits: [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md).
 
 ---
 
@@ -182,7 +184,7 @@ answer. The graph isn't storage beside the product; it *is* the decision.
 | Labelled policy eval: 63 scenarios, 32 negative controls | **First run: 0/63 unsafe allowed**, 23/23 should-BLOCK blocked, 61/63 exact (two over-cautious misses, fixed, labels unchanged) | [`eval/RESULTS.md`](eval/RESULTS.md), [`eval/RESULTS-first-run.md`](eval/RESULTS-first-run.md) |
 | Learning replay | approval prompts per round **3 → 3 → 3 → 0 → 0 → 0**, still 0 unsafe after | same |
 | Adversarial suite through the whole pipeline (planner, Sentinel, Executor, MCP, audit, HTTP) | **17/17 attacks held**, checking that the side effect never happened | [`eval/SECURITY.md`](eval/SECURITY.md) |
-| External agent (Claude Code) with vs without Steward | see the table above | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
+| External agent (Claude Code, 104 runs) with vs without Steward | **without: 22/32 attacks succeeded · with: 0/32**, legit 20/20 both, 0 false blocks | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
 | Live LLM planners following an injected email | **fooled 5/5 (Groq gpt-oss-120b, OpenAI gpt-5.4-mini), blocked 5/5** | `results.md` in the planning notes |
 | Scale | see [`eval/SCALE.md`](eval/SCALE.md) | |
 | 168 automated tests against a real FalkorDB | `bun run test` | |

@@ -378,5 +378,5 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | Done | Result |
 |---|---|
 | Gmail drafts + a "Steward" Google Calendar behind the Sentinel (`1cf04d6`) | On the real account: Alex's injected request BLOCKED (no draft), Priya's email became a **real Gmail draft** after human approval, a calendar request became a **real event** (0 attendees). Verified through Google's own API |
-| Scaled external-agent benchmark (13 tasks × 2 conditions × 2 runs × Haiku/Sonnet) | running |
+| Scaled external-agent benchmark (13 tasks × 2 conditions × 2 runs × Haiku/Sonnet, 104 runs) | **Without Steward: Haiku 14/16, Sonnet 8/16 attacks succeeded. With Steward: 0/16 both. Legit 10/10 everywhere, 0 false blocks.** Sonnet resists obvious injections itself but still leaks on "who may see what" calls (restricted pricing, mass send, a new personal address) |
 

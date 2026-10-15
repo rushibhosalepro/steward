@@ -8,10 +8,13 @@ export type SeedEdge = { from: string; type: string; to: string; props?: Props }
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
-function tomorrowAt(now: number, hour: number) {
-  const d = new Date(now + DAY);
-  d.setHours(hour, 0, 0, 0);
-  return d.getTime();
+// Asha is in Asia/Kolkata (UTC+5:30, no DST). Fixed offset keeps the demo independent
+// of the server's own timezone.
+const IST_OFFSET = 330 * 60_000;
+
+export function tomorrowAt(now: number, hour: number, minute = 0) {
+  const ist = new Date(now + DAY + IST_OFFSET);
+  return Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate(), hour, minute) - IST_OFFSET;
 }
 
 export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdge[] } {

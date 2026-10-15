@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
+import { check, type ProposedAction } from "./sentinel/sentinel";
 
 const app = new Hono();
 
@@ -35,6 +36,17 @@ app.get("/users/:id/overview", async (c) => {
     "MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS count ORDER BY type",
   );
   return c.json({ nodes: labels.data ?? [], edges: edges.data ?? [] });
+});
+
+const ACTION_TYPES = new Set(["send_email", "share_doc", "create_event", "create_task"]);
+
+// Dry-run the Sentinel on a proposed action: verdict + every check with its path and Cypher.
+app.post("/users/:id/sentinel/check", async (c) => {
+  const action = await c.req.json<ProposedAction>().catch(() => null);
+  if (!action || !ACTION_TYPES.has(action.type) || typeof action.derivedFrom !== "string") {
+    return c.json({ error: "need { type, derivedFrom, to?, docs?, start?, end? }" }, 400);
+  }
+  return c.json(await check(graphFor(c.req.param("id")), action));
 });
 
 export default {

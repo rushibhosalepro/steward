@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { db, graphFor } from "../db";
+import { graphFor } from "../db";
 import { demoWorld } from "./demo";
 import { seedDemo } from "./seed";
 
@@ -11,7 +11,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await graph.delete();
-  await db.close();
 });
 
 test("loads every node and edge of the demo world", async () => {

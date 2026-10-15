@@ -38,6 +38,11 @@ RETURN node.id AS id, [l IN labels(node) WHERE l <> 'Entity'][0] AS label,
        coalesce(node.name, node.title, node.subject, node.what) AS name, score
 ORDER BY score DESC LIMIT $k`,
 
+  people: `CALL db.idx.fulltext.queryNodes('Entity', $q) YIELD node, score
+WITH node, score WHERE node:Person
+RETURN node.id AS id, 'Person' AS label, node.name AS name, score
+ORDER BY score DESC LIMIT 3`,
+
   expand: `MATCH p = (e:Entity)-[*1..2]-(n:Entity)
 WHERE e.id IN $ids AND none(x IN nodes(p)[1..] WHERE any(l IN labels(x) WHERE l IN $exclude))
 UNWIND relationships(p) AS r
@@ -54,7 +59,7 @@ RETURN u.name AS name, u.timezone AS timezone, collect({key: p.key, value: p.val
 
 export async function retrieve(g: Graph, request: string, k = 6): Promise<Context> {
   const terms = searchTerms(request);
-  const cypher = [Q.entry, Q.expand, Q.nodes, Q.user];
+  const cypher = [Q.entry, Q.people, Q.expand, Q.nodes, Q.user];
 
   const userRow = (await g.roQuery<NonNullable<Context["user"]>>(Q.user)).data?.[0];
   const user = userRow ? { ...userRow, preferences: userRow.preferences.filter((p) => p.key) } : null;
@@ -63,7 +68,11 @@ export async function retrieve(g: Graph, request: string, k = 6): Promise<Contex
 
   // Each term matches as itself or as a prefix ("pric" finds "pricing"), OR'd together.
   const q = terms.map((t) => `${t}|${t}*`).join("|");
-  const entryPoints = (await g.roQuery<Context["entryPoints"][number]>(Q.entry, { params: { q, k, exclude: NOT_CONTEXT } })).data ?? [];
+  const top = (await g.roQuery<Context["entryPoints"][number]>(Q.entry, { params: { q, k, exclude: NOT_CONTEXT } })).data ?? [];
+  // Errands are about people: always keep the best-matching people as entry points, even when
+  // documents and tasks that share a word ("Atlas") outscore them.
+  const people = (await g.roQuery<Context["entryPoints"][number]>(Q.people, { params: { q } })).data ?? [];
+  const entryPoints = [...top, ...people.filter((p) => !top.some((t) => t.id === p.id))];
   if (!entryPoints.length) return { terms, entryPoints, nodes: [], edges: [], user, cypher };
 
   const ids = entryPoints.map((e) => e.id);

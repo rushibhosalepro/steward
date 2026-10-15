@@ -61,6 +61,17 @@ describe("the Priya request", () => {
   });
 });
 
+describe("people are never crowded out", () => {
+  test("Priya stays an entry point even when many Atlas tasks outscore her", async () => {
+    for (let i = 0; i < 8; i++) {
+      await graph.query("CREATE (:Entity:Task {id: $id, title: 'Atlas update sync task', status: 'open'})", { params: { id: `t:noise-${i}` } });
+    }
+    const ctx = await retrieve(graph, "Send Priya the Atlas update before our sync");
+    expect(ctx.entryPoints.map((e) => e.id)).toContain("p:priya");
+    await graph.query("MATCH (t:Task) WHERE t.id STARTS WITH 't:noise-' DELETE t");
+  });
+});
+
 describe("edge cases", () => {
   test("stemming: 'price' finds the 'pricing' sheet", async () => {
     const ctx = await retrieve(graph, "what's the latest on the price sheet");

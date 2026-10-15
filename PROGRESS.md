@@ -3,14 +3,14 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, 12:55 IST · 13h into the 96h window · 127 tests passing · what's left: [**What's remaining**](#whats-remaining) at the end.
+**Last updated:** Thu Oct 15, 13:40 IST · 13.5h into the 96h window · 156 tests passing · **live: https://steward-production-8191.up.railway.app** · what's left: [**What's remaining**](#whats-remaining) at the end.
 
 | Gate (from `../CHECKLIST.md`) | Due | Status |
 |---|---|---|
 | Idea locked, graph model final, labelled scenarios written, criteria asked on Discord | Thu 14:30 | ✅ except **asking about judging criteria on Discord** (yours to do) |
 | Seeded graph + Sentinel + Planner + Executor working end to end on the Priya flow | Fri 12:00 | ✅ done Thu 12:06 |
 | **Feature freeze**, scorecard filled, corpus run, both rates published | Sat 09:30 | eval done, provisional scorecard in `../PLAN.md`; freeze is ~44h away |
-| Deployed, seeded, zero-login, no-key fallback, incognito + phone | Sun 00:00 | ⬜ not started |
+| Deployed, seeded, zero-login, no-key fallback, incognito + phone | Sun 00:00 | ✅ **deployed Thu 13:35** on Railway; phone/incognito check still to do |
 | Video, README, blog post, upstream bugs filed | Sun 19:15 | ⬜ |
 
 ---
@@ -206,7 +206,13 @@ See [**What's remaining**](#whats-remaining) at the end of this file.
 
 | live | `adf0d1a` · 13:15 | **OpenAI provider + second live model** | OpenAI added (`gpt-5.4-mini` default, `gpt-5.4-nano` via env); temperature is per-provider because GPT-5 models reject 0 | live: 5 standard requests, no fallback, 1.8–3.4 s; **inbox injection followed 3/3, BLOCKED 3/3**. Both providers together: **fooled 5/5, blocked 5/5** |
 
-**Tests:** 127 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
+| sec 1 | `ebfe717` | **Fact-level information flow + context firewall** | `(Document)-[:CONTAINS]->(Fact)` with markers; check `content_flow` blocks a leak typed into the text (same path rule as attachments); restricted facts never enter the planner's context | 10 tests; live: asked to put the prices in the email, the model wrote "[Please insert the pricing numbers here]" |
+| sec 2 | `85111fa` | **Taint + Meta's Rule of Two** | check `rule_of_two`: untrusted input (read from the graph, not the planner's claim) + private data + external effect → ASK, no rule can override; `TAINTED_BY` edges | 8 tests; eval A06/A07 relabelled ALLOW → ASK (disclosed) |
+| sec 3 | `0603770` | **Scoped capabilities + volume** | rules cover data up to `internal` (never restricted) and expire 30 days after acceptance; check `volume`: from the 4th outbound action of one request, ASK | 7 tests incl. a 5-email bulk send |
+| sec 4 | `daaffb9` | **Hash-chained audit + kill switch** | every verdict / approval / execution / pause appends an `AuditEvent` (payload hash + previous hash, `NEXT`); `GET /audit/verify` detects edits and deletions; `POST /pause` stops the Executor | 4 tests: chain verifies, edit detected, deletion detected, pause/resume |
+| deploy | `7bc1373` · 13:35 | **Railway** | One service serves API + UI (API also under `/api`), seeded on first boot. FalkorDB as a private Railway service (password via reference variable, volume at `/var/lib/falkordb/data`, AOF on). Planner: OpenAI | live: UI, API, OpenAI plan, injection BLOCKED, audit verifies, MCP 10 tools |
+
+**Tests:** 156 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
 
 ### API
 
@@ -299,7 +305,7 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | # | What | Why it matters | When |
 |---|---|---|---|
 | U1 | ~~Add a second LLM key~~ ✅ OpenAI added; Gemini still optional | second live model to compare with Groq | done |
-| U2 | **Decide where to deploy** (FalkorDB Cloud + Render/Railway/Fly, or one VPS with Docker Compose) and have the account ready | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
+| U2 | ~~Decide where to deploy~~ ✅ Railway: **https://steward-production-8191.up.railway.app** · GitHub push didn't auto-deploy (deployed with `railway up`); check the service's Source → branch / auto-deploy setting · **Decide where to deploy** (FalkorDB Cloud + Render/Railway/Fly, or one VPS with Docker Compose) and have the account ready | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
 | U3 | ~~Push to GitHub and make the repo public~~ ✅ **done Thu 13:00**: [github.com/rushibhosalepro/steward](https://github.com/rushibhosalepro/steward), public, `main` tracks `origin/main` | rule 10: a public source repo | done |
 | U4 | **Ask on Discord:** judging criteria, blog-post prize rules, kickoff date | the paying axis is still a guess without criteria | Thu |
 | U5 | Register / team up in the WeMakeDevs panel and look at the **submission form fields** | may ask for things not on any public page | Fri |
@@ -310,7 +316,7 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | # | What | Size | Notes |
 |---|---|---|---|
 | B1 | ~~Second live model + side-by-side~~ ✅ OpenAI `gpt-5.4-mini` vs Groq in `../results.md` | S | done |
-| B2 | **Deploy**: API serves the built UI (one service), FalkorDB hosted, seeded on boot, offline fallback, CORS/ports sorted; test in incognito + on a phone | M | needs U2, U3 |
+| B2 | ~~Deploy~~ ✅ live on Railway. Still: test on a phone + incognito; **rate-limit the public planner** (anyone can spend the OpenAI key); auto-deploy from GitHub | M | mostly done |
 | B3 | Known issue: re-running a request duplicates an existing prep task | S | dedupe in the Executor |
 | B4 | Offline planner on inbox requests ("go through my inbox") does nothing; when Groq is rate-limited the fallback plans nothing | S | handle requests from known contacts' mail |
 | B5 | Planner evaluation on live LLMs: N fixed requests × each configured model → did it propose the right actions, and did any unsafe one get through (it can't) | M | strong evidence; mind Groq's 8k tokens/minute |
@@ -332,4 +338,13 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | S7 | **`../AI-DISCLOSURE.md`**: Claude Code used throughout; what you verified yourself (rules 11–13) | rule 11 |
 | S8 | Fill the **freeze scorecard** in `../PLAN.md` with real scores | Sat 09:30 |
 | S9 | Final pass: links work in incognito, no secrets in git history, tagline chosen and said out loud | night before |
+
+### Added Thu 13:40 (security follow-ups)
+
+| # | What | Notes |
+|---|---|---|
+| X1 | Eval: add the adversarial security batch (indirect leak, tainted request, scope abuse, bulk send, audit tamper, credential exposure) with labels written first | the ideas list from the security review |
+| X2 | UI: pause button + "audit ✓ N events" in the header; labels exist for the new checks | endpoints exist |
+| X3 | README: security section — what's enforced (8 checks, firewall, capabilities, audit, kill switch) and what's honestly out of scope (no network tools exist; no separate policy service) | limits |
+| X4 | Public demo abuse: per-IP rate limit on `/requests` and `/seed` | cost + vandalism |
 

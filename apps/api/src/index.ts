@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { isPaused, setPaused, verifyAudit } from "./audit/audit";
+import { humanOnly, isApprover } from "./limits/approver";
 import { limit, LIMITS, llmBudget } from "./limits/limits";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
@@ -27,6 +28,15 @@ app.use("/users/:id/mail", limit("mail", LIMITS.mail));
 app.use("/users/:id/actions/*", limit("actions", LIMITS.actions));
 app.use("/users/:id/actions", limit("actions", LIMITS.actions));
 app.use("/users/:id/mcp", limit("mcp", LIMITS.actions));
+
+// Human-only routes: the approver code is required (see limits/approver.ts).
+const human = humanOnly();
+for (const path of [
+  "/users/:id/actions/:actionId/approve", "/users/:id/actions/:actionId/reject",
+  "/users/:id/rules/:ruleId/*", "/users/:id/pause", "/users/:id/seed",
+  "/users/:id/suggestions/:sid/*", "/users/:id/mail",
+]) app.use(path, human);
+app.get("/approver/check", (c) => c.json({ ok: isApprover(c.req.header("x-steward-approver")) }));
 
 app.get("/health", async (c) => {
   const graphs = await db.list();
@@ -195,7 +205,7 @@ app.get("/users/:id/tasks", async (c) => c.json(await tasksView(graphFor(c.req.p
 // Production: one service. The API answers at / (as in dev and the MCP docs) and at /api (what
 // the UI calls; in dev Vite strips the prefix), and the built UI is served for everything else.
 const WEB_DIST = fileURLToPath(new URL("../../web/dist/", import.meta.url));
-const root = new Hono();
+export const root = new Hono();
 root.route("/api", app);
 root.route("/", app);
 if (existsSync(WEB_DIST)) {

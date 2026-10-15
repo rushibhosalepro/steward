@@ -62,12 +62,29 @@ export type MailItem = {
 export type Suggestion = { id: string; kind: string; text: string; request: string | null; score: number; why: string; refs: string[] };
 export type Task = { id: string; title: string; due: number | null; status: string; blockedBy: string[]; project: string | null };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+// The approver code proves a human is acting. Agents never have it; the server rejects
+// approvals, rule changes, pause/resume, reset and simulated mail without it.
+const APPROVER_KEY = "steward-approver";
+const readCode = () => {
+  try { return localStorage.getItem(APPROVER_KEY) ?? ""; } catch { return ""; }
+};
+const saveCode = (code: string) => {
+  try { localStorage.setItem(APPROVER_KEY, code); } catch { /* private mode: ask again next time */ }
+};
+
+async function call<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   const res = await fetch(`${base}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    headers: { "content-type": "application/json", "x-steward-approver": readCode(), ...(init?.headers ?? {}) },
   });
   const body = await res.json().catch(() => ({}));
+  if (res.status === 403 && (body as { humanOnly?: boolean }).humanOnly && !retried) {
+    const code = window.prompt("This needs a human. Enter the approver code (shown in the server log, or given to judges):");
+    if (code) {
+      saveCode(code.trim());
+      return call<T>(path, init, true);
+    }
+  }
   if (!res.ok) throw new Error((body as { error?: string }).error ?? `${res.status} ${res.statusText}`);
   return body as T;
 }

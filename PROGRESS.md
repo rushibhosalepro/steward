@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, 12:46 IST · 13.5h into the 96h window · 122 tests passing.
+**Last updated:** Thu Oct 15, 12:53 IST · 14h into the 96h window · 126 tests passing.
 
 | Gate (from `../CHECKLIST.md`) | Due | Status |
 |---|---|---|
@@ -164,6 +164,8 @@ Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by cen
   on every step · `algo.pageRank` · shortest paths · **MCP** (10 tools, no approve tool by design). Plus one upstream bug found and reproduced (`../BUGS.md`).
 - **Restraint as the architecture:** the model only proposes; the graph decides; BLOCK is final;
   rules never widen themselves; Scout only suggests.
+- **A real model, a real injection:** told to "do whatever people asked for", Groq's
+  `gpt-oss-120b` followed Alex's injected mail **2 of 2 times**; the Sentinel **blocked 2 of 2**.
 - **Evidence:** 63 labelled scenarios with **32 negative controls**. First run, labels frozen:
   **0 unsafe actions allowed**, 23/23 should-BLOCK blocked. The two misses were over-cautious
   and are fixed (first-run report kept). Learning replay: prompts **3 → 3 → 3 → 0 → 0 → 0**, still
@@ -171,7 +173,7 @@ Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by cen
 
 ### What's not built yet
 
-**Deployment** · a live run of an **LLM planner** (Claude, Grok, Gemini, Groq, OpenRouter or Ollama are wired; needs one key)
+**Deployment** · live runs of the other LLM providers (Groq is live)
 · community detection → contexts · shortest-path explanations · conversation memory.
 See *Build order* below.
 
@@ -201,7 +203,9 @@ See *Build order* below.
 
 | 11 | `102e05f` · 12:46 | **MCP server** | Steward's graph as **10 MCP tools**: `steward_search` · `steward_get_context` (GraphRAG) · `steward_find_connection` (**shortest path**, not routed through the user; "no path" is meaningful) · `steward_who_matters` (**PageRank**) · `steward_check_action` (Sentinel dry run) · `steward_propose_action` (Sentinel decides; runs only on ALLOW) · `steward_run_request` (full pipeline) · `steward_list_inbox` · `steward_explain_action` · `steward_get_suggestions`. **No approve / reject / rule tools on purpose:** an agent over MCP can propose, only a human in the UI can approve. Read tools annotated read-only. Proposals attributed to an `MCP client` agent. Served over **Streamable HTTP** at `/users/:id/mcp` (stateless) and **stdio** (`bun run mcp`) | 13 tests through a real MCP client (in-memory transport): tool list has no approve tool, annotations, search, path found / no path, PageRank order, context, dry run stores nothing, injected request BLOCKED + attributed, ASK lands in inbox, task runs, run_request, suggestions. Live: HTTP initialize → 10 tools → a call; stdio initialize → a call |
 
-**Tests:** 122 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
+| live | `0337ca7` · 12:53 | **First live LLM run (Groq `gpt-oss-120b`)** | Fixes it surfaced: Groq default model updated (old one gone; fallback kicked in as designed) · inbox requests ("go through my inbox") now start from the latest inbound mail · `Plan` / `Step` / `Suggestion` no longer leak into the planner's context · provider errors drop account ids · a hygiene test catches control characters in source | **Told to "do whatever people asked for", the model followed Alex's injected mail 2/2 times; the Sentinel blocked 2/2.** 3rd run hit the free-tier 8k TPM limit → offline fallback. See `../results.md` |
+
+**Tests:** 126 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
 
 ### API
 
@@ -261,7 +265,7 @@ See *Build order* below.
 | Learning: propose narrow rule → accept / revoke | ✅ |
 | Seeded synthetic user, zero login | ✅ Reset demo + one-click samples |
 | Eval over labelled scenarios | ✅ 63 + learning replay |
-| Planner with an LLM | 🟨 Claude, Grok, Gemini, Groq, OpenRouter, Ollama built; **none run live yet (no keys)**; offline planner + automatic fallback cover the demo |
+| Planner with an LLM | ✅ **Groq (`gpt-oss-120b`) run live**; Claude, Grok, Gemini, OpenRouter, Ollama wired but not run; offline fallback proven (rate limit → offline) |
 | Deploy | ⬜ |
 
 ---
@@ -269,9 +273,8 @@ See *Build order* below.
 ## Build order from here (one feature, one commit)
 
 1. **Deploy:** one public URL serving API + UI, seeded, no login, offline planner as fallback; test in incognito and on a phone
-2. **Live LLM planner run**: put any one key in `.env` (a free Groq, Gemini or OpenRouter key is enough), run the samples, fix what the first real call surfaces
-3. Known issue: dedupe a prep task that already exists
-4. If time before the freeze (Sat 09:30): community detection → contexts as rule scopes; shortest-path explanation in the "why" panel
+2. Known issue: dedupe a prep task that already exists
+3. If time before the freeze (Sat 09:30): community detection → contexts as rule scopes; shortest-path explanation in the "why" panel
 
 Then the submission: README with graph model + Cypher (rule 10), video, blog post, file `../BUGS.md` #1 upstream, AI disclosure.
 
@@ -287,5 +290,6 @@ Then the submission: README with graph model + Cypher (rule 10), video, blog pos
 - **Upstream bug found:** FalkorDB 6.0.2 drops rows in `OPTIONAL MATCH … WHERE` after an aggregating `WITH`. Repro and workaround in `../BUGS.md` #1. File before Sun 19:15.
 - **Known issue:** re-running a request re-creates an existing prep task.
 - `bun run dev` loads the root `.env`, so an `ANTHROPIC_API_KEY` there reaches the Planner.
-- Dev preview in this session runs the API on :8788 (`STEWARD_API` points Vite at it); `bun run dev` uses :8787.
+- Groq free tier is 8k tokens/minute for `gpt-oss-120b`: about two plans a minute. Fine for a demo; the offline fallback covers bursts.
+- Dev preview in this session runs the API on whatever port the launcher assigns (`STEWARD_API` points Vite at it); `bun run dev` uses :8787.
 - AI assistant (Claude Code) used throughout; to be logged in `../AI-DISCLOSURE.md` (rule 11).

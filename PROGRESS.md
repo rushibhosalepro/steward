@@ -3,13 +3,13 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, 12:53 IST · 14h into the 96h window · 126 tests passing.
+**Last updated:** Thu Oct 15, 12:55 IST · 13h into the 96h window · 126 tests passing · what's left: [**What's remaining**](#whats-remaining) at the end.
 
 | Gate (from `../CHECKLIST.md`) | Due | Status |
 |---|---|---|
 | Idea locked, graph model final, labelled scenarios written, criteria asked on Discord | Thu 14:30 | ✅ except **asking about judging criteria on Discord** (yours to do) |
 | Seeded graph + Sentinel + Planner + Executor working end to end on the Priya flow | Fri 12:00 | ✅ done Thu 12:06 |
-| **Feature freeze**, scorecard filled, corpus run, both rates published | Sat 09:30 | eval done; freeze is 45h away |
+| **Feature freeze**, scorecard filled, corpus run, both rates published | Sat 09:30 | eval done, provisional scorecard in `../PLAN.md`; freeze is ~44h away |
 | Deployed, seeded, zero-login, no-key fallback, incognito + phone | Sun 00:00 | ⬜ not started |
 | Video, README, blog post, upstream bugs filed | Sun 19:15 | ⬜ |
 
@@ -173,9 +173,7 @@ Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by cen
 
 ### What's not built yet
 
-**Deployment** · live runs of the other LLM providers (Groq is live)
-· community detection → contexts · shortest-path explanations · conversation memory.
-See *Build order* below.
+See [**What's remaining**](#whats-remaining) at the end of this file.
 
 ---
 
@@ -270,14 +268,6 @@ See *Build order* below.
 
 ---
 
-## Build order from here (one feature, one commit)
-
-1. **Deploy:** one public URL serving API + UI, seeded, no login, offline planner as fallback; test in incognito and on a phone
-2. Known issue: dedupe a prep task that already exists
-3. If time before the freeze (Sat 09:30): community detection → contexts as rule scopes; shortest-path explanation in the "why" panel
-
-Then the submission: README with graph model + Cypher (rule 10), video, blog post, file `../BUGS.md` #1 upstream, AI disclosure.
-
 ## Notes and decisions
 
 - Every node also carries `:Entity` so edges can be matched by id without knowing the label.
@@ -293,3 +283,50 @@ Then the submission: README with graph model + Cypher (rule 10), video, blog pos
 - Groq free tier is 8k tokens/minute for `gpt-oss-120b`: about two plans a minute. Fine for a demo; the offline fallback covers bursts.
 - Dev preview in this session runs the API on whatever port the launcher assigns (`STEWARD_API` points Vite at it); `bun run dev` uses :8787.
 - AI assistant (Claude Code) used throughout; to be logged in `../AI-DISCLOSURE.md` (rule 11).
+
+---
+
+## What's remaining
+
+As of Thu Oct 15, 12:55 IST. **Freeze: Sat 09:30 · Submit by: Sun 21:00** (deadline 23:59).
+The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
+
+### Needs you (I can't do these)
+
+| # | What | Why it matters | When |
+|---|---|---|---|
+| U1 | **Add the Gemini key** to `steward/.env` (in progress) | second live model to compare with Groq | now |
+| U2 | **Decide where to deploy** (FalkorDB Cloud + Render/Railway/Fly, or one VPS with Docker Compose) and have the account ready | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
+| U3 | **Push to GitHub and make the repo public.** Remote `origion` → `rushibhosalepro/steward` exists, but nothing is pushed (and it's spelled `origion`, not `origin`) | rule 10: a public source repo | before deploy |
+| U4 | **Ask on Discord:** judging criteria, blog-post prize rules, kickoff date | the paying axis is still a guess without criteria | Thu |
+| U5 | Register / team up in the WeMakeDevs panel and look at the **submission form fields** | may ask for things not on any public page | Fri |
+| U6 | Record the **video** (your voice); post the **blog** under your name | rule 13: meaningful participant contribution | Sat–Sun |
+
+### Build, before the freeze (Sat 09:30)
+
+| # | What | Size | Notes |
+|---|---|---|---|
+| B1 | **Gemini live run** + side-by-side with Groq on the same requests (Priya, inbox injection, Alex, 8am) | S | needs U1 |
+| B2 | **Deploy**: API serves the built UI (one service), FalkorDB hosted, seeded on boot, offline fallback, CORS/ports sorted; test in incognito + on a phone | M | needs U2, U3 |
+| B3 | Known issue: re-running a request duplicates an existing prep task | S | dedupe in the Executor |
+| B4 | Offline planner on inbox requests ("go through my inbox") does nothing; when Groq is rate-limited the fallback plans nothing | S | handle requests from known contacts' mail |
+| B5 | Planner evaluation on live LLMs: N fixed requests × each configured model → did it propose the right actions, and did any unsafe one get through (it can't) | M | strong evidence; mind Groq's 8k tokens/minute |
+| B6 | *Optional:* draw the shortest path in the "why" panel (the MCP tool already computes it) | S | visible "show the path" |
+| B7 | *Optional:* community detection (`algo.labelPropagation`) → contexts (work / family) as rule scopes | M | first to cut |
+| B8 | *Optional:* vector index for fuzzier retrieval and name matching | M | listed in the plan's sponsor features, not built; don't claim it |
+| B9 | *Optional:* conversation memory (`Session` / `Turn`) | M | T2 "persistent conversation history" |
+
+### Submission assets (rule 10 and the handbook)
+
+| # | What | Notes |
+|---|---|---|
+| S1 | **README**: what it is, setup, **graph data model**, **the Cypher queries the product depends on**, the take-it-out paragraph, MCP setup, limits (3 concrete), AI disclosure, eval numbers | rule 10 requires the model and the queries |
+| S2 | **Demo video**: open on the live injection BLOCK, then the Priya flow, the "why" panel, rule learning, Scout, MCP | under 3 min; first 15 s is the product |
+| S3 | **Live URL** (or full local setup) | from B2 |
+| S4 | **Tracks named**: T2 Agent Memory and Coordination (primary) + T1 Agents That Act on Connected Data | rule 5 |
+| S5 | **Blog post** for the AirPods prize | rules not published (U4) |
+| S6 | **File `../BUGS.md` #1 upstream** (FalkorDB `OPTIONAL MATCH … WHERE` after aggregating `WITH`), link it from the README | sponsor engagement |
+| S7 | **`../AI-DISCLOSURE.md`**: Claude Code used throughout; what you verified yourself (rules 11–13) | rule 11 |
+| S8 | Fill the **freeze scorecard** in `../PLAN.md` with real scores | Sat 09:30 |
+| S9 | Final pass: links work in incognito, no secrets in git history, tagline chosen and said out loud | night before |
+

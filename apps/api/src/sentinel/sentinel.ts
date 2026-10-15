@@ -52,7 +52,8 @@ RETURN d.title AS title, d.sensitivity AS sensitivity, s.name AS sharedWith,
   provenance: `MATCH (src:Entity {id: $id})
 OPTIONAL MATCH (src)-[:FROM]->(sender:Person)
 OPTIONAL MATCH (u:User)-[:KNOWS]->(sender)
-RETURN src.subject AS subject, sender.name AS sender, sender.email AS senderEmail, count(u) > 0 AS known`,
+RETURN 'Request' IN labels(src) AS isRequest, src.text AS text, src.subject AS subject,
+       sender.name AS sender, sender.email AS senderEmail, count(u) > 0 AS known`,
 
   preference: `MATCH (:User)-[:PREFERS]->(p:Preference {key: 'no_meetings_before'})
 MATCH (u:User) RETURN p.value AS value, u.timezone AS tz`,
@@ -130,13 +131,20 @@ async function provenance(g: Graph, a: ProposedAction): Promise<CheckResult> {
   const base = { check: "provenance" as const, cypher: [Q.provenance] };
   if (a.derivedFrom === "user") return { ...base, status: "pass", reason: "you asked for this directly", evidence: ["Request typed by you"] };
 
-  const res = await g.roQuery<{ subject: string | null; sender: string | null; senderEmail: string | null; known: boolean }>(
+  const res = await g.roQuery<{
+    isRequest: boolean; text: string | null; subject: string | null;
+    sender: string | null; senderEmail: string | null; known: boolean;
+  }>(
     Q.provenance, { params: { id: a.derivedFrom } },
   );
   const row = res.data?.[0];
   if (!row) return { ...base, status: "ask", reason: `unknown source ${a.derivedFrom}`, evidence: [] };
-  const path = `Action -DERIVED_FROM-> "${row.subject}" -FROM-> ${row.sender}`;
   const refs = [a.derivedFrom];
+  if (row.isRequest) {
+    return { ...base, status: "pass", reason: "you asked for this directly", evidence: [`Action -DERIVED_FROM-> Request "${row.text}"`], refs };
+  }
+  if (!row.sender) return { ...base, status: "ask", reason: `source ${a.derivedFrom} has no known sender`, evidence: [], refs };
+  const path = `Action -DERIVED_FROM-> "${row.subject}" -FROM-> ${row.sender}`;
 
   if (!row.known && OUTBOUND.includes(a.type)) {
     return { ...base, status: "block", reason: `requested by ${row.sender} (${row.senderEmail}), who you don't know: possible injected request`, evidence: [path], refs };

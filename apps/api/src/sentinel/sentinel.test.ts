@@ -82,6 +82,19 @@ describe("negative controls: acting would be wrong", () => {
   });
 });
 
+describe("provenance", () => {
+  test("an action derived from a stored Request counts as the user asking", async () => {
+    await graph.query("CREATE (:Entity:Request {id: 'req:test', text: 'send Priya the update', ts: 0})");
+    const r = await run({ type: "send_email", to: PRIYA, docs: ["d:atlas-update-v2"], derivedFrom: "req:test" });
+    expect(status(r, "provenance")).toBe("pass");
+  });
+
+  test("a source with no sender asks rather than passes", async () => {
+    const r = await run({ type: "send_email", to: PRIYA, derivedFrom: "pr:atlas" });
+    expect(status(r, "provenance")).toBe("ask");
+  });
+});
+
 describe("allowed by the graph", () => {
   test("the pricing sheet can go to Rahul: it's explicitly shared with him", async () => {
     const r = await run({ type: "share_doc", to: "rahul@example.com", docs: ["d:atlas-pricing"], derivedFrom: "user" });

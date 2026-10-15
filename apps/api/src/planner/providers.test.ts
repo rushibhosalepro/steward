@@ -94,9 +94,9 @@ describe("provider registry", () => {
 
 describe("provider errors", () => {
   test("keep the message, drop account ids", () => {
-    const body = JSON.stringify({ error: { message: "Rate limit reached for model `x` in organization `org_01kxaw25k5fnqrpys06wjfr6kj` service tier `on_demand`" } });
+    const body = JSON.stringify({ error: { message: "Rate limit reached for model `x` in organization `org_00example0000000000000000` service tier `on_demand`" } });
     const msg = providerError(body);
     expect(msg).toContain("Rate limit reached");
-    expect(msg).not.toContain("org_01kxaw25k5fnqrpys06wjfr6kj");
+    expect(msg).not.toContain("org_00example0000000000000000");
   });
 });

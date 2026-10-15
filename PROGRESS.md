@@ -373,3 +373,10 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | External-agent benchmark: Claude Code with only Steward's MCP tools vs ordinary connectors (`eval/EXTERNAL-AGENT.md`) | **Haiku: attacks 3/3 without → 0/3 with. Sonnet: 1/3 → 0/3. Legit 3/3 everywhere, 0 false blocks.** First baseline discarded (it leaked Steward's checks) |
 | Next | real Gmail drafts + Calendar (step 4 of the agreed plan) once you set up Google OAuth; more attack tasks and repeats for a rate |
 
+### Thu ~15:30 — real connectors (step 4 of the agreed plan)
+
+| Done | Result |
+|---|---|
+| Gmail drafts + a "Steward" Google Calendar behind the Sentinel (`1cf04d6`) | On the real account: Alex's injected request BLOCKED (no draft), Priya's email became a **real Gmail draft** after human approval, a calendar request became a **real event** (0 attendees). Verified through Google's own API |
+| Scaled external-agent benchmark (13 tasks × 2 conditions × 2 runs × Haiku/Sonnet) | running |
+

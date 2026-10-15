@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, 10:30 IST, 10.5h into the 96h window.
+**Last updated:** Thu Oct 15, ~11:05 IST, 11h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -29,7 +29,9 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | 1 | `c3dfe34` | **Schema + synthetic demo world** | Indexes on `Entity.id`, `Person.email`, `Meeting.start`. Demo user Asha: 28 nodes / 36 edges: 5 people (one stranger, Alex), 3 projects, 5 docs (v1→v2 of the Atlas update, a restricted pricing sheet shared only with Rahul), tomorrow's 11:00 Priya sync, a task that BLOCKS another, 2 commitments, a no-meetings-before-10 preference, and 2 inbound mails (Priya's real request, Alex's injected one) | 4 tests: counts, multi-hop Priya → meeting → Atlas → latest doc, idempotent reseed |
 | 2 | `ad8033e` | **Sentinel** | 5 deterministic Cypher checks: known recipient · information flow · provenance · calendar · standing rule. Most severe failure wins. Each check returns reason + graph path + the exact Cypher | 13 tests, 6 of them negative controls. Live endpoint blocks Alex's request on two grounds |
 
-**Tests:** 17 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| 3 | *this commit* | **Actions in the graph + approval inbox** | Every proposed action becomes an `Action` node: `DERIVED_FROM` its source (inbound `Message`, or a `Request` node for things the user typed), `TARGETS` the person, `USES` the docs, `PROPOSED` by the Planner, `CHECKED` by the Sentinel, and `JUSTIFIED_BY {check, status}` edges to every entity its verdict rests on. ASK → `pending` (the inbox), ALLOW → `ready`, BLOCK → `blocked`. Approve/reject creates an `Approval` node; **a BLOCK can't be approved in-app**, and nothing is decided twice | 8 tests: graph wiring, inbox, why-panel data, approve, double-decide 409, blocked can't be approved, Request provenance, reject + 404 |
+
+**Tests:** 25 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -40,6 +42,10 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | `POST /users/:id/seed` | resets the user's graph to the demo world |
 | `GET /users/:id/overview` | node and edge counts by label and type |
 | `POST /users/:id/sentinel/check` | dry-runs the Sentinel on a proposed action |
+| `POST /users/:id/actions` | proposes an action: Sentinel verdict + stored as an `Action` node |
+| `GET /users/:id/inbox` | pending (ASK) actions awaiting approval |
+| `GET /users/:id/actions/:actionId` | one action with checks, source, `JUSTIFIED_BY` entities and decisions (the "why" panel's data) |
+| `POST /users/:id/actions/:actionId/approve` · `/reject` | records an `Approval`; 409 if blocked or already decided |
 
 ### What the Sentinel decides on the demo world today
 
@@ -68,14 +74,14 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | 3 | GraphRAG retrieval for the Planner | ⬜ (the multi-hop query exists in tests) |
 | 4 | Conversation memory (Session / Turn) | ⬜ |
 | 5 | The plan as Plan / Step nodes | ⬜ |
-| 6 | Agent coordination via Action status | ⬜ |
+| 6 | Agent coordination via Action status | 🟨 Planner → Sentinel handoff recorded as `PROPOSED` / `CHECKED` edges and Action status; Executor not yet |
 | 7 | **Permissions (Sentinel)** | ✅ 5 checks |
 | 8 | Tools' state as graph nodes (outbox, calendar, tasks) | 🟨 seeded, no tools write yet |
 | 9 | Procedural memory (Rules) | 🟨 Sentinel reads rules; nothing creates them yet |
 | 10 | Proactive suggestions (Scout) | ⬜ |
 | 11 | PageRank prioritisation | ⬜ |
 | 12 | Community detection → Contexts | ⬜ (first cut if behind) |
-| 13 | Shortest path for the "why" panel | 🟨 paths are returned as text; no algorithm yet |
+| 13 | Shortest path for the "why" panel | 🟨 `JUSTIFIED_BY` edges + text paths; no algorithm yet |
 | 14 | MCP | ⬜ |
 
 ## Against the scope table in `PLAN.md`
@@ -85,7 +91,7 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | FalkorDB as the only store | ✅ so far: no other datastore exists |
 | Sentinel: 5 Cypher checks | ✅ |
 | Seeded synthetic user, zero login | ✅ seed endpoint; no UI yet |
-| Approval inbox | ⬜ next |
+| Approval inbox | ✅ API (no UI yet) |
 | Planner (LLM) with graph retrieval | ⬜ |
 | Executor + 3 sandboxed tools | ⬜ |
 | Learning: approve → propose narrow rule → accept / revoke | ⬜ |
@@ -100,7 +106,6 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 
 ## Build order from here (one feature, one commit)
 
-3. **Actions in the graph + approval inbox:** `Action` nodes with `DERIVED_FROM / TARGETS / USES / JUSTIFIED_BY`; list, approve and reject endpoints
 4. **Executor + sandboxed tools:** approved and allowed actions write outbox `Message`, `Meeting`, `Task` nodes
 5. **Learning loop:** 3 approvals of the same action type × person → proposed `Rule` → accept / revoke
 6. **Planner (LLM) + GraphRAG retrieval:** request → subgraph → structured actions → Sentinel

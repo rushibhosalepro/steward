@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
-import { check, type ProposedAction } from "./sentinel/sentinel";
+import { decide, getAction, isProposedAction, listInbox, proposeAction } from "./actions/actions";
+import { check } from "./sentinel/sentinel";
 
 const app = new Hono();
 
@@ -38,16 +39,38 @@ app.get("/users/:id/overview", async (c) => {
   return c.json({ nodes: labels.data ?? [], edges: edges.data ?? [] });
 });
 
-const ACTION_TYPES = new Set(["send_email", "share_doc", "create_event", "create_task"]);
+const BAD_ACTION = { error: "need { type, derivedFrom, to?, docs?, start?, end?, subject?, body?, title?, due?, request? }" };
 
 // Dry-run the Sentinel on a proposed action: verdict + every check with its path and Cypher.
 app.post("/users/:id/sentinel/check", async (c) => {
-  const action = await c.req.json<ProposedAction>().catch(() => null);
-  if (!action || !ACTION_TYPES.has(action.type) || typeof action.derivedFrom !== "string") {
-    return c.json({ error: "need { type, derivedFrom, to?, docs?, start?, end? }" }, 400);
-  }
+  const action = await c.req.json().catch(() => null);
+  if (!isProposedAction(action)) return c.json(BAD_ACTION, 400);
   return c.json(await check(graphFor(c.req.param("id")), action));
 });
+
+// Propose an action: the Sentinel checks it and it's stored in the graph with its verdict.
+app.post("/users/:id/actions", async (c) => {
+  const action = await c.req.json().catch(() => null);
+  if (!isProposedAction(action)) return c.json(BAD_ACTION, 400);
+  return c.json(await proposeAction(graphFor(c.req.param("id")), action), 201);
+});
+
+// The approval inbox: every action the Sentinel answered with ASK.
+app.get("/users/:id/inbox", async (c) => c.json(await listInbox(graphFor(c.req.param("id")))));
+
+// One action with everything the "why" panel needs.
+app.get("/users/:id/actions/:actionId", async (c) => {
+  const action = await getAction(graphFor(c.req.param("id")), c.req.param("actionId"));
+  return action ? c.json(action) : c.json({ error: "no such action" }, 404);
+});
+
+for (const [path, decision] of [["approve", "approved"], ["reject", "rejected"]] as const) {
+  app.post(`/users/:id/actions/:actionId/${path}`, async (c) => {
+    const body = await c.req.json<{ note?: string }>().catch(() => ({ note: undefined }));
+    const r = await decide(graphFor(c.req.param("id")), c.req.param("actionId"), decision, body.note);
+    return r.ok ? c.json(r) : c.json({ error: r.error }, r.code);
+  });
+}
 
 export default {
   port: Number(process.env.PORT ?? 8787),

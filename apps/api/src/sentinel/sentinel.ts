@@ -13,6 +13,11 @@ export type ProposedAction = {
   start?: number;         // create_event, epoch ms
   end?: number;
   derivedFrom: string;    // "user" (typed by the user) or the id of the Message that prompted it
+  subject?: string;       // send_email
+  body?: string;
+  title?: string;         // create_event / create_task
+  due?: number;           // create_task
+  request?: string;       // the user's words, when derivedFrom is "user"
 };
 
 export type Status = "pass" | "ask" | "block" | "skip";
@@ -24,6 +29,7 @@ export type CheckResult = {
   reason: string;
   evidence: string[];     // human-readable graph paths
   cypher: string[];       // the queries that produced the evidence
+  refs?: string[];        // ids of the graph entities the verdict rests on (become JUSTIFIED_BY edges)
 };
 
 export type SentinelResult = { verdict: Verdict; reason: string; checks: CheckResult[] };
@@ -34,14 +40,14 @@ const OUTBOUND: ActionType[] = ["send_email", "share_doc"];
 const Q = {
   recipient: `MATCH (p:Person {email: $email})
 OPTIONAL MATCH (:User)-[k:KNOWS]->(p)
-RETURN p.name AS name, k.count AS count`,
+RETURN p.id AS id, p.name AS name, k.count AS count`,
 
   docFlow: `MATCH (d:Document {id: $doc})
 OPTIONAL MATCH (d)-[:SHARED_WITH]->(s:Person {email: $email})
 OPTIONAL MATCH (d)-[:BELONGS_TO]->(pr:Project)<-[:MEMBER_OF]-(m:Person {email: $email})
 OPTIONAL MATCH (newer:Document)-[:SUPERSEDES]->(d)
 RETURN d.title AS title, d.sensitivity AS sensitivity, s.name AS sharedWith,
-       pr.name AS project, m.name AS member, newer.title AS newer`,
+       pr.id AS projectId, pr.name AS project, m.name AS member, newer.title AS newer`,
 
   provenance: `MATCH (src:Entity {id: $id})
 OPTIONAL MATCH (src)-[:FROM]->(sender:Person)
@@ -52,7 +58,7 @@ RETURN src.subject AS subject, sender.name AS sender, sender.email AS senderEmai
 MATCH (u:User) RETURN p.value AS value, u.timezone AS tz`,
 
   overlap: `MATCH (m:Meeting {status: 'confirmed'}) WHERE m.start < $end AND m.end > $start
-RETURN m.title AS title`,
+RETURN m.id AS id, m.title AS title`,
 
   rule: `MATCH (r:Rule {active: true, action_type: $type})-[:SCOPED_TO]->(p:Person {email: $email})
 RETURN r.id AS id, p.name AS name`,
@@ -62,11 +68,11 @@ async function knownRecipient(g: Graph, a: ProposedAction): Promise<CheckResult>
   const base = { check: "known_recipient" as const, cypher: [Q.recipient] };
   if (!a.to) return { ...base, status: "skip", reason: "no recipient", evidence: [] };
 
-  const res = await g.roQuery<{ name: string; count: number | null }>(Q.recipient, { params: { email: a.to } });
+  const res = await g.roQuery<{ id: string; name: string; count: number | null }>(Q.recipient, { params: { email: a.to } });
   const row = res.data?.[0];
   if (!row) return { ...base, status: "ask", reason: `${a.to} is not in your graph at all`, evidence: [] };
-  if (!row.count) return { ...base, status: "ask", reason: `You have never been in contact with ${row.name}`, evidence: [`${row.name} has no KNOWS edge from you`] };
-  return { ...base, status: "pass", reason: `You know ${row.name}`, evidence: [`You -KNOWS {${row.count} contacts}-> ${row.name}`] };
+  if (!row.count) return { ...base, status: "ask", reason: `You have never been in contact with ${row.name}`, evidence: [`${row.name} has no KNOWS edge from you`], refs: [row.id] };
+  return { ...base, status: "pass", reason: `You know ${row.name}`, evidence: [`You -KNOWS {${row.count} contacts}-> ${row.name}`], refs: [row.id] };
 }
 
 async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
@@ -77,11 +83,12 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
   let status: Status = "pass";
   const reasons: string[] = [];
   const evidence: string[] = [];
+  const refs: string[] = [];
 
   for (const doc of a.docs) {
     const res = await g.roQuery<{
       title: string; sensitivity: string; sharedWith: string | null;
-      project: string | null; member: string | null; newer: string | null;
+      projectId: string | null; project: string | null; member: string | null; newer: string | null;
     }>(Q.docFlow, { params: { doc, email: a.to } });
     const rows = res.data ?? [];
     if (!rows.length) {
@@ -90,6 +97,7 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
       continue;
     }
     const d = rows[0]!;
+    refs.push(doc);
     const shared = rows.find((r) => r.sharedWith);
     const viaProject = rows.find((r) => r.member);
 
@@ -100,6 +108,7 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
       reasons.push(`"${d.title}" is restricted and not shared with ${a.to}`);
     } else if (viaProject) {
       evidence.push(`${d.title} -BELONGS_TO-> ${viaProject.project} <-MEMBER_OF- ${viaProject.member}`);
+      refs.push(viaProject.projectId!);
     } else if (d.sensitivity === "public") {
       evidence.push(`${d.title} is public`);
     } else {
@@ -114,7 +123,7 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
   }
 
   const reason = reasons.length ? reasons.join("; ") : "every document reaches the recipient through the graph";
-  return { ...base, status, reason, evidence };
+  return { ...base, status, reason, evidence, refs };
 }
 
 async function provenance(g: Graph, a: ProposedAction): Promise<CheckResult> {
@@ -127,12 +136,13 @@ async function provenance(g: Graph, a: ProposedAction): Promise<CheckResult> {
   const row = res.data?.[0];
   if (!row) return { ...base, status: "ask", reason: `unknown source ${a.derivedFrom}`, evidence: [] };
   const path = `Action -DERIVED_FROM-> "${row.subject}" -FROM-> ${row.sender}`;
+  const refs = [a.derivedFrom];
 
   if (!row.known && OUTBOUND.includes(a.type)) {
-    return { ...base, status: "block", reason: `requested by ${row.sender} (${row.senderEmail}), who you don't know: possible injected request`, evidence: [path] };
+    return { ...base, status: "block", reason: `requested by ${row.sender} (${row.senderEmail}), who you don't know: possible injected request`, evidence: [path], refs };
   }
-  if (!row.known) return { ...base, status: "ask", reason: `requested by ${row.sender}, who you don't know`, evidence: [path] };
-  return { ...base, status: "pass", reason: `requested by ${row.sender}, who you know`, evidence: [path] };
+  if (!row.known) return { ...base, status: "ask", reason: `requested by ${row.sender}, who you don't know`, evidence: [path], refs };
+  return { ...base, status: "pass", reason: `requested by ${row.sender}, who you know`, evidence: [path], refs };
 }
 
 function localHourMinute(ms: number, tz: string) {
@@ -156,14 +166,14 @@ async function calendar(g: Graph, a: ProposedAction): Promise<CheckResult> {
       evidence.push(`You -PREFERS-> no_meetings_before ${pref.value}`);
     }
   }
-  const clashes = (await g.roQuery<{ title: string }>(Q.overlap, { params: { start: a.start, end: a.end } })).data ?? [];
+  const clashes = (await g.roQuery<{ id: string; title: string }>(Q.overlap, { params: { start: a.start, end: a.end } })).data ?? [];
   for (const c of clashes) {
     reasons.push(`overlaps "${c.title}"`);
     evidence.push(`overlaps Meeting "${c.title}"`);
   }
 
   return reasons.length
-    ? { ...base, status: "ask", reason: reasons.join("; "), evidence }
+    ? { ...base, status: "ask", reason: reasons.join("; "), evidence, refs: clashes.map((c) => c.id) }
     : { ...base, status: "pass", reason: "fits your calendar and preferences", evidence };
 }
 
@@ -175,7 +185,7 @@ async function standingRule(g: Graph, a: ProposedAction): Promise<CheckResult> {
   const res = await g.roQuery<{ id: string; name: string }>(Q.rule, { params: { type: a.type, email: a.to } });
   const row = res.data?.[0];
   if (!row) return { ...base, status: "ask", reason: `no standing rule for ${a.type} to ${a.to} yet`, evidence: [] };
-  return { ...base, status: "pass", reason: `rule ${row.id} allows ${a.type} to ${row.name}`, evidence: [`Rule ${row.id} -SCOPED_TO-> ${row.name}`] };
+  return { ...base, status: "pass", reason: `rule ${row.id} allows ${a.type} to ${row.name}`, evidence: [`Rule ${row.id} -SCOPED_TO-> ${row.name}`], refs: [row.id] };
 }
 
 export async function check(g: Graph, a: ProposedAction): Promise<SentinelResult> {

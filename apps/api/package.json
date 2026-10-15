@@ -9,7 +9,8 @@
     "test": "bun test",
     "eval": "bun --env-file=../../.env src/eval/run.ts",
     "mcp": "bun --env-file=../../.env src/mcp/stdio.ts",
-    "eval:security": "bun --env-file=../../.env src/eval/security.ts"
+    "eval:security": "bun --env-file=../../.env src/eval/security.ts",
+    "eval:agent": "bun --env-file=../../.env src/eval/external-agent.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.134.0",

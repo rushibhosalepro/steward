@@ -95,6 +95,23 @@ async function fulfilCommitments(g: Graph, a: ActionProps, ts: number) {
   return (res.data ?? []).map((r) => r.what);
 }
 
+// EVALUATION BASELINE ONLY: what an agent's tools would do with no Sentinel in front of them.
+// Used by the "without Steward" condition of the external-agent benchmark, through an MCP
+// endpoint that exists only when STEWARD_ALLOW_UNGUARDED=1 (never set in production).
+export async function performUnguarded(g: Graph, action: ProposedAction) {
+  const id = `act:${crypto.randomUUID()}`;
+  const props = Object.fromEntries(Object.entries({
+    type: action.type, to: action.to, docs: action.docs, subject: action.subject, body: action.body,
+    title: action.title, start: action.start, end: action.end, due: action.due,
+    status: "done", verdict: "UNGUARDED", created_at: Date.now(),
+  }).filter(([, v]) => v !== undefined && v !== null));
+  await g.query("CREATE (a:Entity:Action) SET a = $props, a.id = $id", { params: { props: props as never, id } });
+  const a = { ...action, id, status: "done" } as ActionProps;
+  const produced = await perform(g, a, Date.now());
+  await fulfilCommitments(g, a, Date.now());
+  return { id, produced };
+}
+
 export async function executeAction(g: Graph, id: string): Promise<ExecResult> {
   if (await isPaused(g)) return { ok: false, id, status: "paused", error: "Steward is paused by the user; nothing runs until they resume" };
   const claimed = await claim(g, id);

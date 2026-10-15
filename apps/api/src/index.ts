@@ -180,6 +180,16 @@ for (const decision of ["dismiss", "accept", "decline"] as const) {
   });
 }
 
+// Evaluation baseline only: the same MCP tools with no Sentinel, for the "without Steward"
+// condition of the external-agent benchmark. Off unless STEWARD_ALLOW_UNGUARDED=1.
+if (process.env.STEWARD_ALLOW_UNGUARDED === "1") {
+  app.all("/users/:id/mcp-unguarded", async (c) => {
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    await createMcpServer(c.req.param("id"), { guarded: false }).connect(transport);
+    return transport.handleRequest(c.req.raw);
+  });
+}
+
 // MCP over Streamable HTTP, stateless: a fresh server + transport per request, scoped to the user.
 app.all("/users/:id/mcp", async (c) => {
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });

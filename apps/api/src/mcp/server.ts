@@ -3,7 +3,7 @@ import type { Graph } from "falkordb";
 import { z } from "zod";
 import { getAction, listInbox, proposeAction } from "../actions/actions";
 import { graphFor } from "../db";
-import { executeAction } from "../executor/executor";
+import { executeAction, performUnguarded } from "../executor/executor";
 import { choosePlanner, planRequest } from "../planner/plan";
 import { renderContext, retrieve, searchTerms } from "../retrieval/retrieve";
 import { runScout } from "../scout/scout";
@@ -54,7 +54,7 @@ async function toProposed(g: Graph, a: ActionArgs): Promise<ProposedAction> {
   };
 }
 
-export function createMcpServer(userId: string) {
+export function createMcpServer(userId: string, { guarded = true }: { guarded?: boolean } = {}) {
   const g = graphFor(userId);
   const server = new McpServer({ name: "steward", version: "0.1.0" });
 
@@ -131,11 +131,18 @@ export function createMcpServer(userId: string) {
   }, async (args) => json(await check(g, await toProposed(g, args as ActionArgs))));
 
   server.registerTool("steward_propose_action", {
-    title: "Propose an action",
-    description: "Propose one errand. The Sentinel decides: ALLOW runs it now (sandboxed: nothing leaves the user's graph), ASK puts it in the user's approval inbox, BLOCK records it and it can never run. You cannot approve anything over MCP.",
+    title: guarded ? "Propose an action" : "Do an action",
+    description: guarded
+      ? "Propose one errand. The Sentinel decides: ALLOW runs it now (sandboxed: nothing leaves the user's graph), ASK puts it in the user's approval inbox, BLOCK records it and it can never run. You cannot approve anything over MCP."
+      : "Do one errand now: send an email, share a document, create an event or a task.",
     inputSchema: actionShape,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async (args) => {
+    if (!guarded) {
+      // Evaluation baseline: the same tool with no Sentinel. Never reachable in production.
+      const done = await performUnguarded(g, await toProposed(g, args as ActionArgs));
+      return json({ id: done.id, status: "done" });
+    }
     const proposed = await proposeAction(g, await toProposed(g, args as ActionArgs), "a:mcp");
     const execution = proposed.status === "ready" ? await executeAction(g, proposed.id) : null;
     return json({

@@ -13,7 +13,7 @@ const STOPWORDS = new Set(
     "which who will with would you your about before after send prepare make get tomorrow today").split(" "),
 );
 
-const NOT_CONTEXT = ["User", "Agent", "Action", "Approval", "Rule", "Request", "Plan", "Step", "Suggestion", "AuditEvent"];
+const NOT_CONTEXT = ["User", "Agent", "Action", "Approval", "Rule", "Request", "Plan", "Step", "Suggestion", "AuditEvent", "Session", "Turn"];
 
 export type ContextNode = { id: string; label: string; name: string; props: Record<string, unknown> };
 export type ContextEdge = { from: string; rel: string; to: string };
@@ -23,6 +23,8 @@ export type Context = {
   nodes: ContextNode[];
   edges: ContextEdge[];
   user: { name: string; timezone: string; preferences: { key: string; value: string }[] } | null;
+  // Episodic memory: the last few turns of this session and what each was about.
+  conversation?: { text: string; mentions: string[] }[];
   cypher: string[];
 };
 
@@ -63,19 +65,34 @@ RETURN n.id AS id, [l IN labels(n) WHERE l <> 'Entity'][0] AS label,
   facts: `MATCH (d:Document)-[r:CONTAINS]->(f:Fact) WHERE d.id IN $docs AND f.sensitivity IN ['public', 'internal']
 RETURN d.id AS from, type(r) AS rel, f.id AS to`,
 
+  turns: `MATCH (:Session {id: $sid})-[:HAS]->(t:Turn)
+OPTIONAL MATCH (t)-[:MENTIONS]->(e:Entity)
+RETURN t.text AS text, t.ts AS ts, collect(e.id) AS mentions
+ORDER BY ts DESC LIMIT 3`,
+
+  byId: `MATCH (e:Entity) WHERE e.id IN $ids AND none(l IN labels(e) WHERE l IN $exclude)
+RETURN e.id AS id, [l IN labels(e) WHERE l <> 'Entity'][0] AS label, coalesce(e.name, e.title, e.subject, e.id) AS name, 0 AS score`,
+
   user: `MATCH (u:User) OPTIONAL MATCH (u)-[:PREFERS]->(p:Preference)
 RETURN u.name AS name, u.timezone AS timezone, collect({key: p.key, value: p.value}) AS preferences`,
 };
 
-export async function retrieve(g: Graph, request: string, k = 6): Promise<Context> {
+export async function retrieve(g: Graph, request: string, k = 6, sessionId?: string): Promise<Context> {
   const terms = searchTerms(request);
-  const cypher = [Q.entry, Q.people, Q.recentMail, Q.expand, Q.nodes, Q.user];
+  const cypher = [Q.entry, Q.people, Q.recentMail, Q.expand, Q.nodes, Q.user, ...(sessionId ? [Q.turns] : [])];
+
+  // "Send that to Rahul": what the last turns were about becomes a starting point too.
+  const turns = sessionId ? ((await g.roQuery<{ text: string; ts: number; mentions: string[] }>(Q.turns, { params: { sid: sessionId } })).data ?? []).reverse() : [];
+  const conversation = turns.map((t) => ({ text: t.text, mentions: t.mentions }));
+  const remembered = turns.length
+    ? (await g.roQuery<Context["entryPoints"][number]>(Q.byId, { params: { ids: [...new Set(turns.flatMap((t) => t.mentions))], exclude: NOT_CONTEXT } })).data ?? []
+    : [];
 
   const userRow = (await g.roQuery<NonNullable<Context["user"]>>(Q.user)).data?.[0];
   const user = userRow ? { ...userRow, preferences: userRow.preferences.filter((p) => p.key) } : null;
 
   const mail = INBOX.test(request) ? (await g.roQuery<Context["entryPoints"][number]>(Q.recentMail)).data ?? [] : [];
-  if (!terms.length && !mail.length) return { terms, entryPoints: [], nodes: [], edges: [], user, cypher };
+  if (!terms.length && !mail.length && !remembered.length) return { terms, entryPoints: [], nodes: [], edges: [], user, conversation, cypher };
 
   // Each term matches as itself or as a prefix ("pric" finds "pricing"), OR'd together.
   const q = terms.map((t) => `${t}|${t}*`).join("|");
@@ -84,8 +101,8 @@ export async function retrieve(g: Graph, request: string, k = 6): Promise<Contex
   // documents and tasks that share a word ("Atlas") outscore them.
   const people = terms.length ? (await g.roQuery<Context["entryPoints"][number]>(Q.people, { params: { q } })).data ?? [] : [];
   const entryPoints: Context["entryPoints"] = [];
-  for (const e of [...top, ...people, ...mail]) if (!entryPoints.some((x) => x.id === e.id)) entryPoints.push(e);
-  if (!entryPoints.length) return { terms, entryPoints, nodes: [], edges: [], user, cypher };
+  for (const e of [...top, ...people, ...mail, ...remembered]) if (!entryPoints.some((x) => x.id === e.id)) entryPoints.push(e);
+  if (!entryPoints.length) return { terms, entryPoints, nodes: [], edges: [], user, conversation, cypher };
 
   const ids = entryPoints.map((e) => e.id);
   const edges = (await g.roQuery<ContextEdge>(Q.expand, { params: { ids, exclude: NOT_CONTEXT } })).data ?? [];
@@ -107,7 +124,7 @@ export async function retrieve(g: Graph, request: string, k = 6): Promise<Contex
   });
   const allEdges = [...edges, ...factEdges.filter((f) => !edges.some((e) => e.from === f.from && e.to === f.to && e.rel === f.rel))];
 
-  return { terms, entryPoints, nodes, edges: allEdges.filter((e) => !withheld.has(e.from) && !withheld.has(e.to)), user, cypher: [...cypher, Q.facts] };
+  return { terms, entryPoints, nodes, edges: allEdges.filter((e) => !withheld.has(e.from) && !withheld.has(e.to)), user, conversation, cypher: [...cypher, Q.facts] };
 }
 
 // The compact text form the Planner gets in its prompt: nodes with their ids and key
@@ -118,6 +135,10 @@ export function renderContext(ctx: Context, now = Date.now()) {
   if (ctx.user) {
     lines.push(`user: ${ctx.user.name} (timezone ${ctx.user.timezone})`);
     for (const p of ctx.user.preferences) lines.push(`user preference: ${p.key} = ${p.value}`);
+  }
+  if (ctx.conversation?.length) {
+    lines.push("", "recent conversation (oldest first):");
+    for (const t of ctx.conversation) lines.push(`- the user said: "${t.text}"${t.mentions.length ? ` (it involved: ${t.mentions.join(", ")})` : ""}`);
   }
   lines.push("", "nodes:");
   for (const n of ctx.nodes) {

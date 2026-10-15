@@ -74,6 +74,8 @@ export function App() {
   const [ingested, setIngested] = useState<IngestResult | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [planners, setPlanners] = useState<string[]>(["offline"]);
+  // One conversation per page load: lets a follow-up say "send that to Rahul".
+  const [sessionId] = useState(() => crypto.randomUUID());
   const [google, setGoogle] = useState<GoogleStatus | null>(null);
   const [paused, setPaused] = useState(false);
   const [audit, setAudit] = useState<{ ok: boolean; length: number; brokenAt?: number; reason?: string } | null>(null);
@@ -106,14 +108,14 @@ export function App() {
 
   const runRequest = (text: string) => guard(async () => {
     setRequest(text);
-    const result = await api.request(text, planner || undefined);
+    const result = await api.request(text, planner || undefined, sessionId);
     setPlan(result);
     setSelected(result.steps[0]?.action.id ?? null);
     await refresh();
   });
 
   const submit = () => guard(async () => {
-    const result = await api.request(request, planner || undefined);
+    const result = await api.request(request, planner || undefined, sessionId);
     setPlan(result);
     setSelected(result.steps[0]?.action.id ?? null);
     await refresh();

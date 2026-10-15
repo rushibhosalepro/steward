@@ -95,7 +95,7 @@ const post = <T>(path: string, body?: unknown) => call<T>(path, { method: "POST"
 
 export const api = {
   seed: () => post<{ nodes: number; edges: number }>("/seed"),
-  request: (request: string, planner?: string) => post<PlanResult>("/requests", { request, planner }),
+  request: (request: string, planner?: string, sessionId?: string) => post<PlanResult>("/requests", { request, planner, sessionId }),
   actions: () => call<ActivityItem[]>("/actions"),
   inbox: () => call<ActivityItem[]>("/inbox"),
   action: (id: string) => call<ActionDetail>(`/actions/${id}`),

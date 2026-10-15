@@ -97,13 +97,13 @@ export function toProposed(a: PlannedAction, requestId: string, requestText: str
   };
 }
 
-export async function planRequest(g: Graph, request: string, planner: Planner) {
+export async function planRequest(g: Graph, request: string, planner: Planner, opts: { sessionId?: string } = {}) {
   const now = Date.now();
   const requestId = `req:${crypto.randomUUID()}`;
   const planId = `plan:${crypto.randomUUID()}`;
   await g.query("CREATE (:Entity:Request {id: $id, text: $text, ts: $ts})", { params: { id: requestId, text: request, ts: now } });
 
-  const ctx = await retrieve(g, request);
+  const ctx = await retrieve(g, request, 6, opts.sessionId);
   const plan = await planner.plan(request, ctx, renderContext(ctx, now));
 
   await g.query(
@@ -138,6 +138,22 @@ export async function planRequest(g: Graph, request: string, planner: Planner) {
       status: execution?.ok ? "done" : execution ? execution.status : proposed.status,
       execution,
     });
+  }
+
+  // Episodic memory: this request becomes a Turn in its Session, linked to what it was about
+  // (the people and documents its actions touched), so the next turn can say "that".
+  if (opts.sessionId) {
+    const about = [...new Set(plan.actions.flatMap((a) => [...a.docs, ...(a.to ? [a.to.toLowerCase()] : [])]))];
+    await g.query(
+      `MERGE (s:Entity:Session {id: $sid}) ON CREATE SET s.started_at = $ts
+       CREATE (t:Entity:Turn {id: $tid, text: $text, ts: $ts})
+       CREATE (s)-[:HAS]->(t)
+       WITH t MATCH (r:Request {id: $requestId}) CREATE (t)-[:ASKED]->(r)
+       WITH t UNWIND $about AS key
+       MATCH (e:Entity) WHERE e.id = key OR (e:Person AND e.email = key)
+       CREATE (t)-[:MENTIONS]->(e)`,
+      { params: { sid: opts.sessionId, tid: `turn:${crypto.randomUUID()}`, text: request, ts: now, requestId, about } },
+    );
   }
 
   return {

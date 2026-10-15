@@ -166,7 +166,8 @@ app.get("/planners", (c) => c.json({ available: availablePlanners(), default: pr
 // The front door: a sentence in, a plan of Sentinel-checked actions out. ALLOWed actions run;
 // ASKs land in the inbox; BLOCKs are recorded. { planner?: "claude" | "offline" } overrides the default.
 app.post("/users/:id/requests", async (c) => {
-  const body = await c.req.json<{ request?: string; planner?: string }>().catch(() => ({ request: undefined, planner: undefined }));
+  const body = await c.req.json<{ request?: string; planner?: string; sessionId?: string }>().catch(() => ({ request: undefined, planner: undefined, sessionId: undefined }));
+  const sessionId = typeof body.sessionId === "string" && /^[a-z0-9-]{8,64}$/i.test(body.sessionId) ? body.sessionId : undefined;
   if (typeof body.request !== "string" || !body.request.trim()) return c.json({ error: "need { request }" }, 400);
   let planner;
   try {
@@ -175,7 +176,7 @@ app.post("/users/:id/requests", async (c) => {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
   try {
-    return c.json(await planRequest(graphFor(c.req.param("id")), body.request, planner), 201);
+    return c.json(await planRequest(graphFor(c.req.param("id")), body.request, planner, { sessionId }), 201);
   } catch (err) {
     return c.json({ error: `planning failed: ${err instanceof Error ? err.message : String(err)}` }, 502);
   }

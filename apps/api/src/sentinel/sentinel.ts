@@ -18,6 +18,8 @@ export type ProposedAction = {
   title?: string;         // create_event / create_task
   due?: number;           // create_task
   request?: string;       // the user's words, when derivedFrom is "user"
+  selfId?: string;        // set when re-checking a stored action, so it doesn't count itself
+  selfCreatedAt?: number; // ...and only counts actions created before it
 };
 
 export type Status = "pass" | "ask" | "block" | "skip";
@@ -80,7 +82,8 @@ RETURN r.id AS id, coalesce(r.description, r.id) AS description, p.name AS name,
        coalesce(r.max_sensitivity, 'internal') AS scope`,
 
   outboundFromSource: `MATCH (a:Action)-[:DERIVED_FROM]->(:Entity {id: $src})
-WHERE a.type IN ['send_email', 'share_doc'] OR (a.type = 'create_event' AND a.to IS NOT NULL)
+WHERE (a.type IN ['send_email', 'share_doc'] OR (a.type = 'create_event' AND a.to IS NOT NULL))
+  AND a.id <> $self AND coalesce(a.created_at, 0) <= $before
 RETURN count(a) AS c`,
 };
 
@@ -301,7 +304,7 @@ async function volume(g: Graph, a: ProposedAction): Promise<CheckResult> {
   const base = { check: "volume" as const, cypher: [Q.outboundFromSource] };
   const external = OUTBOUND.includes(a.type) || (a.type === "create_event" && !!a.to);
   if (!external || a.derivedFrom === "user") return { ...base, status: "skip", reason: "not part of a multi-action request", evidence: [] };
-  const n = (await g.roQuery<{ c: number }>(Q.outboundFromSource, { params: { src: a.derivedFrom } })).data?.[0]?.c ?? 0;
+  const n = (await g.roQuery<{ c: number }>(Q.outboundFromSource, { params: { src: a.derivedFrom, self: a.selfId ?? "", before: a.selfCreatedAt ?? Number.MAX_SAFE_INTEGER } })).data?.[0]?.c ?? 0;
   if (n >= MAX_OUTBOUND_PER_REQUEST) {
     return { ...base, status: "ask", reason: `this request already produced ${n} outbound actions; more than ${MAX_OUTBOUND_PER_REQUEST} needs you`, evidence: [`${n} Actions -DERIVED_FROM-> the same source`], refs: [a.derivedFrom] };
   }

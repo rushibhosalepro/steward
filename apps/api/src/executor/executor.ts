@@ -106,7 +106,7 @@ export async function executeAction(g: Graph, id: string): Promise<ExecResult> {
   const a = claimed.props;
 
   // Re-check against the graph as it is now: it may have changed since the verdict.
-  const recheck = await check(g, { ...a, derivedFrom: claimed.source ?? "unknown" });
+  const recheck = await check(g, { ...a, derivedFrom: claimed.source ?? "unknown", selfId: a.id, selfCreatedAt: (a as { created_at?: number }).created_at });
   if (recheck.verdict === "BLOCK") {
     await setStatus(g, id, "blocked", `graph changed since the verdict: ${recheck.reason}`);
     await appendAudit(g, "execution", id, { status: "blocked", reason: recheck.reason });

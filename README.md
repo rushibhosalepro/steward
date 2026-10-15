@@ -24,4 +24,7 @@ bun run db:up          # FalkorDB on :6379, FalkorDB Browser on http://localhost
 bun run dev            # API on http://localhost:8787
 curl localhost:8787/health
 curl localhost:8787/users/demo/ping
+curl -X POST localhost:8787/users/demo/seed   # load the synthetic demo world
+curl localhost:8787/users/demo/overview       # node and edge counts
+bun run test                                  # needs FalkorDB running
 ```

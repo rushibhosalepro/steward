@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit. Times are IST and taken from the commit log.
 
-**Last updated:** Thu Oct 15, 12:55 IST · 13h into the 96h window · 126 tests passing · what's left: [**What's remaining**](#whats-remaining) at the end.
+**Last updated:** Thu Oct 15, 12:55 IST · 13h into the 96h window · 127 tests passing · what's left: [**What's remaining**](#whats-remaining) at the end.
 
 | Gate (from `../CHECKLIST.md`) | Due | Status |
 |---|---|---|
@@ -164,8 +164,9 @@ Scout: "You promised Priya the Atlas update (Fri 11:00) · #1 of 5 people by cen
   on every step · `algo.pageRank` · shortest paths · **MCP** (10 tools, no approve tool by design). Plus one upstream bug found and reproduced (`../BUGS.md`).
 - **Restraint as the architecture:** the model only proposes; the graph decides; BLOCK is final;
   rules never widen themselves; Scout only suggests.
-- **A real model, a real injection:** told to "do whatever people asked for", Groq's
-  `gpt-oss-120b` followed Alex's injected mail **2 of 2 times**; the Sentinel **blocked 2 of 2**.
+- **Real models, a real injection:** told to "do whatever people asked for", Groq's
+  `gpt-oss-120b` and OpenAI's `gpt-5.4-mini` followed Alex's injected mail **5 of 5 times**;
+  the Sentinel **blocked 5 of 5**.
 - **Evidence:** 63 labelled scenarios with **32 negative controls**. First run, labels frozen:
   **0 unsafe actions allowed**, 23/23 should-BLOCK blocked. The two misses were over-cautious
   and are fixed (first-run report kept). Learning replay: prompts **3 → 3 → 3 → 0 → 0 → 0**, still
@@ -203,7 +204,9 @@ See [**What's remaining**](#whats-remaining) at the end of this file.
 
 | live | `0337ca7` · 12:53 | **First live LLM run (Groq `gpt-oss-120b`)** | Fixes it surfaced: Groq default model updated (old one gone; fallback kicked in as designed) · inbox requests ("go through my inbox") now start from the latest inbound mail · `Plan` / `Step` / `Suggestion` no longer leak into the planner's context · provider errors drop account ids · a hygiene test catches control characters in source | **Told to "do whatever people asked for", the model followed Alex's injected mail 2/2 times; the Sentinel blocked 2/2.** 3rd run hit the free-tier 8k TPM limit → offline fallback. See `../results.md` |
 
-**Tests:** 126 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
+| live | `adf0d1a` · 13:15 | **OpenAI provider + second live model** | OpenAI added (`gpt-5.4-mini` default, `gpt-5.4-nano` via env); temperature is per-provider because GPT-5 models reject 0 | live: 5 standard requests, no fallback, 1.8–3.4 s; **inbox injection followed 3/3, BLOCKED 3/3**. Both providers together: **fooled 5/5, blocked 5/5** |
+
+**Tests:** 127 pass, 0 fail, against a real FalkorDB (`bun run test`). **Eval:** `bun run eval`.
 
 ### API
 
@@ -263,7 +266,7 @@ See [**What's remaining**](#whats-remaining) at the end of this file.
 | Learning: propose narrow rule → accept / revoke | ✅ |
 | Seeded synthetic user, zero login | ✅ Reset demo + one-click samples |
 | Eval over labelled scenarios | ✅ 63 + learning replay |
-| Planner with an LLM | ✅ **Groq (`gpt-oss-120b`) run live**; Claude, Grok, Gemini, OpenRouter, Ollama wired but not run; offline fallback proven (rate limit → offline) |
+| Planner with an LLM | ✅ **Groq (`gpt-oss-120b`) and OpenAI (`gpt-5.4-mini`) run live**; Claude, Grok, Gemini, OpenRouter, Ollama wired but not run; offline fallback proven (rate limit → offline) |
 | Deploy | ⬜ |
 
 ---
@@ -295,7 +298,7 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 
 | # | What | Why it matters | When |
 |---|---|---|---|
-| U1 | **Add the Gemini key** to `steward/.env` (in progress) | second live model to compare with Groq | now |
+| U1 | ~~Add a second LLM key~~ ✅ OpenAI added; Gemini still optional | second live model to compare with Groq | done |
 | U2 | **Decide where to deploy** (FalkorDB Cloud + Render/Railway/Fly, or one VPS with Docker Compose) and have the account ready | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
 | U3 | ~~Push to GitHub and make the repo public~~ ✅ **done Thu 13:00**: [github.com/rushibhosalepro/steward](https://github.com/rushibhosalepro/steward), public, `main` tracks `origin/main` | rule 10: a public source repo | done |
 | U4 | **Ask on Discord:** judging criteria, blog-post prize rules, kickoff date | the paying axis is still a guess without criteria | Thu |
@@ -306,7 +309,7 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 
 | # | What | Size | Notes |
 |---|---|---|---|
-| B1 | **Gemini live run** + side-by-side with Groq on the same requests (Priya, inbox injection, Alex, 8am) | S | needs U1 |
+| B1 | ~~Second live model + side-by-side~~ ✅ OpenAI `gpt-5.4-mini` vs Groq in `../results.md` | S | done |
 | B2 | **Deploy**: API serves the built UI (one service), FalkorDB hosted, seeded on boot, offline fallback, CORS/ports sorted; test in incognito + on a phone | M | needs U2, U3 |
 | B3 | Known issue: re-running a request duplicates an existing prep task | S | dedupe in the Executor |
 | B4 | Offline planner on inbox requests ("go through my inbox") does nothing; when Groq is rate-limited the fallback plans nothing | S | handle requests from known contacts' mail |

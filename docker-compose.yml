@@ -5,7 +5,7 @@ services:
       - "6379:6379"   # Redis protocol (clients)
       - "3000:3000"   # FalkorDB Browser
     volumes:
-      - falkordb-data:/data
+      - falkordb-data:/var/lib/falkordb/data   # the image's FALKORDB_DATA_PATH
 
 volumes:
   falkordb-data:

@@ -2,14 +2,18 @@
   "name": "steward",
   "private": true,
   "packageManager": "bun@1.4.0",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "turbo run dev",
-    "build": "turbo run build",
+    "build": "bun run --cwd apps/web build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "db:up": "docker compose up -d falkordb",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "start": "bun apps/api/src/index.ts"
   },
   "devDependencies": {
     "turbo": "^2.11.8",

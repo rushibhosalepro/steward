@@ -1,5 +1,9 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { existsSync } from "node:fs";
+import { relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
+import { serveStatic } from "hono/bun";
 import { isPaused, setPaused, verifyAudit } from "./audit/audit";
 import { db, graphFor } from "./db";
 import { seedDemo } from "./seed/seed";
@@ -179,7 +183,24 @@ app.get("/users/:id/outbox", async (c) => c.json(await outbox(graphFor(c.req.par
 app.get("/users/:id/calendar", async (c) => c.json(await calendarView(graphFor(c.req.param("id")))));
 app.get("/users/:id/tasks", async (c) => c.json(await tasksView(graphFor(c.req.param("id")))));
 
+// Production: one service. The API answers at / (as in dev and the MCP docs) and at /api (what
+// the UI calls; in dev Vite strips the prefix), and the built UI is served for everything else.
+const WEB_DIST = fileURLToPath(new URL("../../web/dist/", import.meta.url));
+const root = new Hono();
+root.route("/api", app);
+root.route("/", app);
+if (existsSync(WEB_DIST)) {
+  root.use("/*", serveStatic({ root: relative(process.cwd(), WEB_DIST) }));
+  root.get("*", serveStatic({ path: relative(process.cwd(), `${WEB_DIST}index.html`) }));
+}
+
+// A fresh database (first deploy) gets the synthetic demo user, so the demo works with no setup.
+if (process.env.STEWARD_SEED_DEMO !== "0" && !(await db.list()).includes("user_demo")) {
+  await seedDemo(graphFor("demo"));
+  console.log("seeded the demo user");
+}
+
 export default {
   port: Number(process.env.PORT ?? 8787),
-  fetch: app.fetch,
+  fetch: root.fetch,
 };

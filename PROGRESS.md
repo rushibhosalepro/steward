@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~11:50 IST, 12h into the 96h window.
+**Last updated:** Thu Oct 15, ~12:00 IST, 12h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -21,6 +21,124 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 
 ---
 
+## What we've built, explained
+
+In one sentence: **Steward can already receive a proposed errand, decide from the graph
+whether it's allowed, ask you when it isn't sure, carry it out, remember what happened, and
+learn to stop asking about things you always approve.** What it can't do yet is *think up*
+the errand from a sentence you type. That's the Planner (LLM), which is next.
+
+### 1. A synthetic person, as a graph
+
+Everything starts from one user's graph. Our demo user is **Asha** (all invented, rule 6).
+Her graph holds the people she knows, the projects they share, the documents in each
+project, her calendar, her tasks, the promises she's made, a preference, and her inbox:
+
+```
+            KNOWS                MEMBER_OF              BELONGS_TO
+  Asha ───────────────► Priya ─────────────► Atlas ◄───────────── Atlas update v2 ──SUPERSEDES──► v1
+   │                      ▲                    ▲                  Atlas pricing sheet (restricted)
+   │                      │ WITH               │ ABOUT                    │ SHARED_WITH
+   │              Tomorrow's 11:00 sync ───────┘                          ▼
+   │                                                                    Rahul
+   ├─ PREFERS ─► "no meetings before 10:00"
+   ├─ Commitment: "send Priya the Atlas update before our sync" ──TO──► Priya
+   └─ Inbox: "Before tomorrow" FROM Priya  ·  "Urgent: pricing" FROM Alex Chen (a stranger)
+```
+
+Every user gets their **own isolated graph** in FalkorDB (`user_asha`, `user_<id>`), so one
+person's memory and rules can never leak into another's.
+
+### 2. The Sentinel: the graph decides, not the model
+
+When an action is proposed, say *"email Priya the Atlas update"*, the **Sentinel** runs five
+Cypher checks over Asha's graph. No LLM is involved:
+
+| Check | The question it asks the graph |
+|---|---|
+| **Known recipient** | Has Asha ever been in contact with this person? |
+| **Information flow** | Can this document reach this person? Only if they're on the doc's project, or it's been explicitly shared with them. Restricted docs need an explicit share. An old version gets flagged |
+| **Provenance** | Who actually asked for this? Asha herself, a contact's email, or a stranger's email (a likely prompt injection)? |
+| **Calendar** | Does a new meeting break a preference or clash with another meeting? |
+| **Standing rule** | Has Asha told Steward it may do this kind of thing for this person without asking? |
+
+The result is **ALLOW**, **ASK** or **BLOCK**, plus for each check the reason, the graph path
+it followed, and the exact Cypher it ran. Example: Alex's email asking for the pricing sheet
+is **BLOCKED twice over**: the sheet is restricted and was never shared with him, *and* the
+request came from someone Asha doesn't know.
+
+### 3. Every action lives in the graph, and so does the inbox
+
+A proposed action becomes an **Action node** wired to:
+where it came from (Priya's email, or Asha's own request) · who it targets · which documents
+it uses · which agent proposed it · the Sentinel that checked it · and **`JUSTIFIED_BY` edges
+to every person, project, document and email its verdict rested on.** That last part is the
+data for the *"Why did my agent do that?"* panel.
+
+- **ASK** → the action waits in Asha's **approval inbox** (just a query: pending Actions)
+- **ALLOW** → ready to run
+- **BLOCK** → recorded, never runnable. **Asha can't approve a BLOCK in the app.** This is
+  deliberate restraint, not a missing button
+
+### 4. The Executor does the work, inside the graph
+
+Approved or allowed actions are carried out by the **Executor**. The "tools" are sandboxed
+and are themselves graph writes, so nothing real is ever sent:
+
+- email → an outbound **Message** to the person, with the documents attached
+- meeting → a **Meeting** with the invitee
+- task → a **Task** on Asha's list
+
+Before acting, the Executor **re-checks the action against the graph as it is now**. If the
+document became restricted after Asha approved, the action is blocked. If a rule was revoked
+after the Sentinel allowed it, it goes back to the inbox. Two executors can't run the same
+action, because claiming it is atomic.
+
+Doing the work also **updates what Steward knows**: Asha's contact count with Priya goes up,
+the document is now recorded as shared with Priya, and the commitment *"send Priya the
+update before our sync"* is marked **fulfilled**.
+
+### 5. It learns when to stop asking, carefully
+
+After Asha approves the **same kind of action for the same person three times**, Steward
+**proposes** a rule (*"send email to Priya Nair"*), linked to the three approvals it learned
+from. Nothing changes until Asha **accepts** it. After that, emails to Priya run without
+asking. The rule is deliberately narrow:
+
+- it covers one action type for one person. Rahul still needs approval, and so do meetings with Priya
+- it **never overrides a BLOCK**: the restricted pricing sheet still can't go to Priya
+- Asha can **decline** it or later **revoke** it, and a rejection resets the count
+
+### The full loop today, on the Priya scenario
+
+```
+"email Priya the Atlas update v2" (hand-written for now; the Planner will write these)
+   │
+   ▼  Sentinel: known ✓  flow ✓ (v2 → Atlas ← Priya)  provenance ✓ (Priya's own email)  rule ✗
+ ASK ─► inbox ─► Asha approves ─► Executor re-checks ─► Message in the outbox, v2 attached
+                                                       ─► commitment fulfilled, Priya's tie stronger
+   ×3 approvals ─► rule proposed ─► Asha accepts ─► next email to Priya: ALLOW, no prompt
+```
+
+### Why this matters for judging
+
+- **The take-it-out test (rule 3):** there is no other database. Remove FalkorDB and there's
+  nothing to check against, no inbox, no outbox, no memory and no rules.
+- **The brief's three verbs:** *act* (Executor), *remember* (contacts, shares, commitments,
+  rules) and *show the path* (`JUSTIFIED_BY` edges, paths and Cypher on every verdict).
+- **Restraint as the architecture:** the model will only ever propose. The graph decides,
+  BLOCK is final, and rules never widen themselves.
+- **Tests as evidence:** 52 tests against a real FalkorDB, including the cases where acting
+  would be *wrong* (negative controls).
+
+### What's not built yet
+
+The **Planner** (turning a sentence into actions with graph context), the **web UI**,
+**inbound mail ingest**, **Scout** suggestions with PageRank, the **evaluation** over ~60
+labelled scenarios, and **deployment**. See *Build order* below.
+
+---
+
 ## Built so far
 
 | # | Commit | Feature | What it does | Verified by |
@@ -28,12 +146,9 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 | 0 | `7360b2d` | **Scaffold** | Turborepo + Bun workspaces, `apps/api` on Bun + Hono, `falkordb` client, FalkorDB + Browser via docker compose. `graphFor(userId)` gives every user an isolated graph | `/health` and `/users/:id/ping` round-trip a node |
 | 1 | `c3dfe34` | **Schema + synthetic demo world** | Indexes on `Entity.id`, `Person.email`, `Meeting.start`. Demo user Asha: 28 nodes / 36 edges: 5 people (one stranger, Alex), 3 projects, 5 docs (v1→v2 of the Atlas update, a restricted pricing sheet shared only with Rahul), tomorrow's 11:00 Priya sync, a task that BLOCKS another, 2 commitments, a no-meetings-before-10 preference, and 2 inbound mails (Priya's real request, Alex's injected one) | 4 tests: counts, multi-hop Priya → meeting → Atlas → latest doc, idempotent reseed |
 | 2 | `ad8033e` | **Sentinel** | 5 deterministic Cypher checks: known recipient · information flow · provenance · calendar · standing rule. Most severe failure wins. Each check returns reason + graph path + the exact Cypher | 13 tests, 6 of them negative controls. Live endpoint blocks Alex's request on two grounds |
-
 | 3 | `dcc86de` | **Actions in the graph + approval inbox** | Every proposed action becomes an `Action` node: `DERIVED_FROM` its source (inbound `Message`, or a `Request` node for things the user typed), `TARGETS` the person, `USES` the docs, `PROPOSED` by the Planner, `CHECKED` by the Sentinel, and `JUSTIFIED_BY {check, status}` edges to every entity its verdict rests on. ASK → `pending` (the inbox), ALLOW → `ready`, BLOCK → `blocked`. Approve/reject creates an `Approval` node; **a BLOCK can't be approved in-app**, and nothing is decided twice | 8 tests: graph wiring, inbox, why-panel data, approve, double-decide 409, blocked can't be approved, Request provenance, reject + 404 |
-
 | fix | `296fd14` | **Provenance for Request sources** | User-typed actions derive from a `Request` node; the Sentinel now treats that as the user asking (it would have read as a stranger and blocked on re-check). Sources with no sender ASK | 2 tests |
 | 4 | `3e3a7db` | **Executor + sandboxed tools** | Runs `ready` / `approved` actions. Claims atomically (`status → executing` + `CLAIMED_BY` edge), **re-checks against the current graph** (BLOCK → blocked; a once-allowed action that now needs approval → back to the inbox), then acts as graph writes: email → outbound `Message` `TO` the person `ATTACHES` the docs; event → `Meeting` `WITH` the invitee; task → `Task`. Sending makes the recipient a contact (`KNOWS` count +1) and records `SHARED_WITH`. Open commitments the action keeps are marked `fulfilled` with a `FULFILS` edge. Approving now also executes | 12 tests: end-to-end Priya flow, commitment kept, contact memory, claim/execute edges, no double run, pending/blocked refused, doc turned restricted after approval → blocked, rule revoked after ALLOW → back to inbox, calendar, executor pass, task blocking |
-
 | 5 | `17ade50` | **Learning loop (procedural memory)** | After **3 approvals** of the same action type to the same person, a `Rule {status: proposed}` is created, `SCOPED_TO` the person and `LEARNED_FROM` those `Approval` nodes. It does nothing until the user **accepts**; it can be **declined** or later **revoked**. A rejection, decline or revoke restarts the streak. Rules are narrow (one type × one person) and **never override a BLOCK**: the Sentinel consults them only after every other check passes | 13 tests: no early proposal, proposal on 3rd, proposed rule changes nothing, no duplicates, accepted → ALLOW, narrowness (other person / other type still ASK), BLOCK still wins, revoke → ASK, illegal transitions, fresh streak after revoke, rejection resets, decline |
 
 **Tests:** 52 pass, 0 fail, against a real FalkorDB (`bun run test`).

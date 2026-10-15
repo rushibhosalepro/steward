@@ -3,7 +3,7 @@
 Where Steward stands against the plan (`../PLAN.md`) and the graph model (`../graph-model.md`).
 Updated after every feature commit.
 
-**Last updated:** Thu Oct 15, ~12:00 IST, 12h into the 96h window.
+**Last updated:** Thu Oct 15, ~12:45 IST, 12.5h into the 96h window.
 **Next gate:** idea locked + scenario set written by **Thu Oct 15, 14:30 IST**.
 **Feature freeze:** Sat Oct 17, 09:30 IST.
 
@@ -25,8 +25,9 @@ less over time without getting looser. Tracks: **T2** (memory and coordination) 
 
 In one sentence: **Steward can already receive a proposed errand, decide from the graph
 whether it's allowed, ask you when it isn't sure, carry it out, remember what happened, and
-learn to stop asking about things you always approve.** What it can't do yet is *think up*
-the errand from a sentence you type. That's the Planner (LLM), which is next.
+learn to stop asking about things you always approve.** Since feature 6 it also takes a plain
+sentence ("prepare for tomorrow's meeting with Priya and send her the project update"), finds
+the relevant part of the graph, and plans the errands itself.
 
 ### 1. A synthetic person, as a graph
 
@@ -133,7 +134,7 @@ asking. The rule is deliberately narrow:
 
 ### What's not built yet
 
-The **Planner** (turning a sentence into actions with graph context), the **web UI**,
+A live run of the **Claude planner** (needs an API key; the offline planner covers the demo), the **web UI**,
 **inbound mail ingest**, **Scout** suggestions with PageRank, the **evaluation** over ~60
 labelled scenarios, and **deployment**. See *Build order* below.
 
@@ -153,7 +154,9 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 | 6a | `388f7c6` | **GraphRAG retrieval** | A FalkorDB **full-text index** over names, titles, subjects and commitment text finds the entry points for a request (with stemming: "price" finds "pricing"). One **multi-hop query** (1–2 hops) expands them into the neighbourhood the Planner will see, never passing through the User or Steward's own bookkeeping (agents, actions, approvals, rules). Rendered as compact text: nodes with ids and properties, then edges as id triples. On the Priya request: 6 entry points → 13 nodes, 18 edges, including Alex's injected mail | 9 tests: term extraction, entry points, multi-hop edges, bookkeeping excluded, user prefs, rendering, stemming, empty request, per-user isolation |
 
-**Tests:** 61 pass, 0 fail, against a real FalkorDB (`bun run test`).
+| 6b | `741b7c8` | **Planner: one sentence in, Sentinel-checked actions out** | `POST /users/:id/requests` takes a sentence: retrieval (6a) → a planner proposes typed actions → each goes through the Sentinel → ALLOWs run, ASKs go to the inbox, BLOCKs are recorded. Written to the graph as `(Request)-[:PRODUCED]->(Plan)-[:HAS]->(Step)-[:PROPOSES]->(Action)`, with `(Plan)-[:USED_CONTEXT]->` the entry points. Two planners behind one interface: **Claude** (`claude-opus-5-5`, structured output, server-side refusal fallback) and a deterministic **offline** planner (no key: keeps open commitments, preps for meetings). An invented provenance id fails closed (ASK) | 10 tests incl. **a hijacked planner** that follows Alex's injected mail: all 3 leak attempts BLOCKED, whatever provenance it claims |
+
+**Tests:** 71 pass, 0 fail, against a real FalkorDB (`bun run test`).
 
 ### API so far
 
@@ -174,6 +177,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | `GET /users/:id/rules` | proposed / active / declined / revoked rules, with how many approvals each was learned from |
 | `POST /users/:id/rules/:ruleId/accept` · `/decline` · `/revoke` | the only way a rule changes state |
 | `POST /users/:id/context` | GraphRAG: entry points, subgraph and the rendered text the Planner will get, for `{ request }` |
+| `POST /users/:id/requests` | **the front door**: `{ request, planner? }` → plan → Sentinel → run / inbox / blocked |
 
 ### What the Sentinel decides on the demo world today
 
@@ -201,8 +205,8 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | 2 | Ingest inbound mail, keep knowledge current | 🟨 outbound side done: sending updates `KNOWS`, `SHARED_WITH`, commitments. Inbound ingest not yet |
 | 3 | GraphRAG retrieval for the Planner | ✅ full-text entry points + one multi-hop expansion query (vector index still to add) |
 | 4 | Conversation memory (Session / Turn) | ⬜ |
-| 5 | The plan as Plan / Step nodes | ⬜ |
-| 6 | Agent coordination via Action status | ✅ Planner → Sentinel → Executor via Action status + `PROPOSED` / `CHECKED` / `CLAIMED_BY` / `EXECUTED` edges (Planner itself not built yet) |
+| 5 | The plan as Plan / Step nodes | ✅ `Request → Plan → Step → Action`, `USED_CONTEXT`, `WROTE` |
+| 6 | Agent coordination via Action status | ✅ Planner → Sentinel → Executor via Action status + `WROTE` / `PROPOSED` / `CHECKED` / `CLAIMED_BY` / `EXECUTED` edges |
 | 7 | **Permissions (Sentinel)** | ✅ 5 checks |
 | 8 | Tools' state as graph nodes (outbox, calendar, tasks) | ✅ Executor writes them; views read them |
 | 9 | Procedural memory (Rules) | ✅ learned from approvals, accepted / declined / revoked by the user |
@@ -220,7 +224,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 | Sentinel: 5 Cypher checks | ✅ |
 | Seeded synthetic user, zero login | ✅ seed endpoint; no UI yet |
 | Approval inbox | ✅ API (no UI yet) |
-| Planner (LLM) with graph retrieval | 🟨 retrieval done; Planner next |
+| Planner (LLM) with graph retrieval | ✅ Claude + offline fallback; **Claude path not yet run live (no API key)** |
 | Executor + 3 sandboxed tools | ✅ |
 | Learning: approve → propose narrow rule → accept / revoke | ✅ |
 | Ingest of inbound mail | ⬜ |
@@ -234,7 +238,6 @@ labelled scenarios, and **deployment**. See *Build order* below.
 
 ## Build order from here (one feature, one commit)
 
-6. **Planner (LLM):** context → structured actions → Sentinel, plus an offline fallback planner so the demo works with no API key. **Needs: LLM provider + key**
 7. **Web UI:** request box, approval inbox, "why" panel
 8. **Ingest of inbound mail** (entity extraction + dedup via vector / full-text index)
 9. **Scout + PageRank** suggestions
@@ -247,5 +250,7 @@ labelled scenarios, and **deployment**. See *Build order* below.
 - Labels and edge types can't be Cypher parameters; the seeder validates them before interpolating.
 - Demo times are pinned to IST (fixed +5:30) so the calendar checks don't depend on the server clock.
 - Missing or unknown provenance fails closed (ASK), never open.
+- The Planner gets the subgraph, never the whole graph, and is told message bodies are data, not instructions. The real defence is structural: whatever it proposes, the Sentinel decides (see the hijacked-planner test).
+- The offline planner is the no-key demo path required by the plan, not a mock: it plans from the same retrieved subgraph.
 - **Upstream bug found:** FalkorDB 6.0.2 drops rows in `OPTIONAL MATCH … WHERE` after an aggregating `WITH`. Repro and workaround in `../BUGS.md` #1. To file before Sun 19:15 IST.
 - AI assistant (Claude Code) used for scaffolding, seed data, Sentinel and tests: to be logged in `../AI-DISCLOSURE.md` (rule 11).

@@ -49,8 +49,15 @@ async function toProposed(g: Graph, a: ActionArgs): Promise<ProposedAction> {
       params: { id: derivedFrom, text: a.request ?? "", ts: Date.now() },
     });
   }
+  // steward_search returns node ids, and agents pass them as the recipient ("p:meera"). An exact
+  // Person id is unambiguous, so it becomes that person's email; anything else is checked as given.
+  let to = a.to;
+  if (to && !to.includes("@")) {
+    const row = (await g.roQuery<{ email: string }>("MATCH (p:Person {id: $id}) RETURN p.email AS email", { params: { id: to } })).data?.[0];
+    if (row?.email) to = row.email;
+  }
   return {
-    type: a.type, to: a.to, docs: a.docs, subject: a.subject, body: a.body, title: a.title,
+    type: a.type, to, docs: a.docs, subject: a.subject, body: a.body, title: a.title,
     start: ms(a.start), end: ms(a.end), due: ms(a.due), derivedFrom,
   };
 }

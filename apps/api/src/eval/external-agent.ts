@@ -1,5 +1,5 @@
 import type { Graph } from "falkordb";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { graphFor } from "../db";
@@ -220,7 +220,7 @@ function parseTranscript(text: string) {
   return { tools: init?.tools ?? [], toolCalls, result };
 }
 
-export async function runExternalAgentEval(opts: { model?: string; only?: string[]; repeat?: number } = {}) {
+export async function runExternalAgentEval(opts: { model?: string; only?: string[]; repeat?: number; resume?: boolean } = {}) {
   process.env.STEWARD_ALLOW_UNGUARDED = "1";
   // The per-IP rate limit guards only Steward's /mcp, not the baseline, and every local run comes
   // from one IP: a fast model hitting it would fail an attack for the wrong reason. Lift it here;
@@ -236,10 +236,15 @@ export async function runExternalAgentEval(opts: { model?: string; only?: string
 
   const model = opts.model ?? "sonnet";
   const tag = modelTag(model);
-  const runs: Run[] = [];
+  // Results are saved after every run, so a long run that is interrupted (free-tier models take
+  // minutes per task) keeps what it finished; --resume skips the runs already recorded.
+  const resultsPath = join(outDir, `results-${tag}.json`);
+  const runs: Run[] = opts.resume && existsSync(resultsPath) ? JSON.parse(readFileSync(resultsPath, "utf8")).runs : [];
   for (const task of TASKS.filter((t) => !opts.only || opts.only.includes(t.id))) {
     for (let rep = 1; rep <= (opts.repeat ?? 1); rep++)
     for (const condition of ["with", "without"] as Condition[]) {
+      const transcript = `${tag}-${task.id}-${condition}${(opts.repeat ?? 1) > 1 ? `-r${rep}` : ""}.jsonl`;
+      if (runs.some((r) => r.transcript === transcript)) continue;
       const user = `ext_${tag}_${task.id}_${condition}_r${rep}`.toLowerCase().replace(/[^a-z0-9_]/g, "_");
       const g = graphFor(user);
       await seedDemo(g);
@@ -267,7 +272,6 @@ export async function runExternalAgentEval(opts: { model?: string; only?: string
       }
       const seconds = Math.round((Date.now() - started) / 100) / 10;
 
-      const transcript = `${tag}-${task.id}-${condition}${(opts.repeat ?? 1) > 1 ? `-r${rep}` : ""}.jsonl`;
       writeFileSync(join(outDir, transcript), stdout);
       const t = parseTranscript(stdout);
       const bypassTools = t.tools.filter((x) => !x.startsWith("mcp__steward__"));  // either server is named "steward" in the config
@@ -278,6 +282,7 @@ export async function runExternalAgentEval(opts: { model?: string; only?: string
         : bypassTools.length ? `agent had non-Steward tools: ${bypassTools.join(", ")}`
         : stdout.includes("too many mcp requests") ? "hit Steward's MCP rate limit" : undefined;
       runs.push({ task: task.id, kind: task.kind, condition, seconds, toolCalls: t.toolCalls, verdicts, outcome, transcript, error });
+      writeFileSync(resultsPath, JSON.stringify({ ranAt: new Date().toISOString(), model, partial: true, runs }, null, 2));
       console.log(`${task.id} ${condition.padEnd(7)} ${seconds}s calls=${t.toolCalls} completed=${outcome.completed} attack=${outcome.attackSucceeded} ${error ? `ERROR ${error}` : ""}`);
       await g.delete();
     }
@@ -326,7 +331,7 @@ export function agentMarkdown(r: Awaited<ReturnType<typeof runExternalAgentEval>
 
 if (import.meta.main) {
   const arg = (name: string) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
-  const r = await runExternalAgentEval({ model: arg("--model"), only: arg("--only")?.split(","), repeat: Number(arg("--repeat") ?? 1) });
+  const r = await runExternalAgentEval({ model: arg("--model"), only: arg("--only")?.split(","), repeat: Number(arg("--repeat") ?? 1), resume: process.argv.includes("--resume") });
   const tag = modelTag(r.model);
   await Bun.write(new URL(`../../../../eval/EXTERNAL-AGENT-${tag}.md`, import.meta.url), agentMarkdown(r));
   await Bun.write(new URL(`../../../../eval/agent-runs/results-${tag}.json`, import.meta.url), JSON.stringify(r, null, 2));

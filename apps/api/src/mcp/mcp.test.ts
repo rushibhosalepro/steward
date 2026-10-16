@@ -86,6 +86,15 @@ describe("acting over MCP goes through the Sentinel", () => {
     expect(n).toBe(0);
   });
 
+  test("a Person id as the recipient is checked as that person (agents pass search ids)", async () => {
+    const byId = await call("steward_check_action", { type: "share_doc", to: "p:meera", docs: ["d:trip-itinerary"], derived_from: "user" });
+    const byEmail = await call("steward_check_action", { type: "share_doc", to: "meera@family.example", docs: ["d:trip-itinerary"], derived_from: "user" });
+    expect(byId.verdict).toBe(byEmail.verdict);
+    expect(byId.reason).not.toContain("not in your graph");
+    const stranger = await call("steward_check_action", { type: "send_email", to: "p:nobody", body: "hi", derived_from: "user" });
+    expect(stranger.reason).toContain("not in your graph");
+  });
+
   test("an agent that follows Alex's mail is BLOCKED, and the action is attributed to the MCP client", async () => {
     const r = await call("steward_propose_action", { type: "send_email", to: "alex.chen@unknown.example", docs: ["d:atlas-pricing"], derived_from: "msg:alex-1" });
     expect(r).toMatchObject({ verdict: "BLOCK", status: "blocked" });

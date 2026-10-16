@@ -10,6 +10,10 @@ answer. Approvals become narrow, expiring, reversible rules, so it asks less ove
 getting looser. And because the same Sentinel sits behind an **MCP server**, any outside agent
 gets the same guarantees.
 
+**Why it matters:** in EchoLeak (CVE-2025-32711, CVSS 9.3) one email with hidden instructions got
+Microsoft 365 Copilot to collect internal data and send it out, with no click from the user. When
+the model is the only thing deciding, whoever writes to your inbox is deciding too.
+
 - **Live demo:** https://steward-production-8191.up.railway.app (synthetic demo user, no login)
 - **Tracks:** **T2 Agent Memory and Coordination** (primary) · **T1 Agents That Act on Connected Data**
 - Graph Hacks (WeMakeDevs × FalkorDB), Oct 15–18 2026
@@ -224,6 +228,12 @@ routes (approve, rules, pause, reset, simulated mail) behind an approver code ag
 approve tool over MCP; a hash-chained audit trail (`GET /users/:id/audit/verify`); a kill switch;
 per-IP rate limits and a daily LLM budget on the public demo; only the planner and the Google
 connector modules can reach the network (checked by a test).
+
+**Mapped to OWASP and MITRE ATLAS** (LLM Top 10 2025, Agentic Top 10 2026, ATLAS v5.6.0), with the
+test behind each claim and what isn't covered: [`eval/THREATS.md`](eval/THREATS.md). In short:
+LLM01/ASI01 prompt injection and goal hijack, LLM02 disclosure, ASI02 tool misuse (AML.T0086
+exfiltration via agent tool invocation), LLM06 excessive agency, ASI03 privilege abuse, ASI06 memory
+poisoning, ASI07 inter-agent handoffs, ASI09 trust exploitation.
 
 **Not covered:** an attacker with database or server access; a malicious LLM or FalkorDB provider;
 a fact paraphrased so no marker matches ("forty-eight thousand"); the Sentinel runs in the same

@@ -121,6 +121,30 @@ who shared what with whom, who asked for this. A graph database (FalkorDB) answe
 directly by following connections. Steward keeps **everything** in it: your world, the agent's memory,
 the plans, the approvals, the learned rules, and the audit log. Take FalkorDB out and nothing is left.
 
+### The graph, in short
+
+Each person gets their own graph in FalkorDB. The main things in it, and how they connect:
+
+```
+(You)-[:KNOWS]->(Person)-[:MEMBER_OF]->(Project)<-[:BELONGS_TO]-(Document)-[:CONTAINS]->(Fact)
+(Document)-[:SHARED_WITH]->(Person)           (Message)-[:FROM]->(Person)   (Message)-[:MENTIONS]->(Document)
+(Meeting)-[:WITH]->(Person)   (Commitment)-[:TO]->(Person)   (Session)-[:HAS]->(Turn)-[:MENTIONS]->(…)
+(Agent)-[:PROPOSED]->(Action)<-[:CHECKED]-(Sentinel)   (Approval)-[:ON]->(Action)   (Rule)-[:LEARNED_FROM]->(Approval)
+```
+
+The question the Sentinel asks most often, *"may this document reach this person?"*, is one query:
+
+```cypher
+MATCH (d:Document {id: $doc})
+OPTIONAL MATCH (d)-[:SHARED_WITH]->(s:Person {email: $email})
+OPTIONAL MATCH (d)-[:BELONGS_TO]->(pr:Project)<-[:MEMBER_OF]-(m:Person {email: $email})
+RETURN d.sensitivity, s.name AS sharedWith, pr.name AS project, m.name AS member
+```
+
+It also uses FalkorDB's full-text index (to find what a request is about), multi-hop expansion (the
+agent's context), `algo.pageRank` (what matters most today) and `algo.WCC` (the separate "worlds" of
+your life). Every node type, edge and query: [docs/TECHNICAL.md](docs/TECHNICAL.md#graph-data-model).
+
 ## What it can't do yet (honestly)
 
 - On the public site, Steward can't connect to your own Gmail (Google only lets unverified apps work

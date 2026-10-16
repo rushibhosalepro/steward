@@ -77,10 +77,21 @@ your day, and does errands **through** Steward:
 Claude can suggest things for Steward to remember ("I prefer short emails"), but they only count once
 **you** confirm them. Claude can never approve anything itself.
 
-**4. Guard the email tools your AI already has.** If your Claude Code has its own Gmail connection,
-Steward can sit in front of it. Claude Code itself checks with Steward before every Gmail draft or send.
-The AI can't skip that check, and it can't lie about an email, because Steward sees the real email as
-Gmail returned it. The settings are under **Connect your agent → Copy hook settings**.
+**4. Guard the tools your AI already has.** Your agent probably has its own connectors: Gmail, Slack,
+Google Calendar, Drive. Steward can sit in front of all of them. With Claude Code, the agent's host
+itself checks with Steward before every email, chat message, calendar invite or file share, so the AI
+can't skip the check. And when it reads email, Steward sees the real message as Gmail returned it, so
+the AI can't lie about who sent it.
+
+| Your agent tries to… | Steward says |
+|---|---|
+| email the pricing sheet to a stranger who asked for it | ⛔ BLOCK |
+| post the secret price in a Slack channel | ⛔ BLOCK |
+| share the restricted pricing sheet on Drive with a colleague who isn't cleared | ⛔ BLOCK |
+| invite the stranger whose email it just read to a meeting | ✋ ASK |
+| add a private focus block to your calendar | ✅ ALLOW |
+
+The settings are under **Connect your agent → Copy hook settings**.
 
 ## Does it actually work?
 

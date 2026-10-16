@@ -64,9 +64,9 @@ that I prefer short emails"*) are used only after you confirm them. On the share
 approving needs the approver code; in your sandbox, your browser is enough. To use real
 Gmail drafts, run it locally ([Run it](#run-it)): the approver code is printed at startup. More scenarios with expected results: [`eval/RESULTS.md`](../eval/RESULTS.md).
 
-**Guard the agent's own Gmail, so it can't skip Steward or lie about an email.** If your agent has its
-own Gmail connector, Steward can sit in front of it through Claude Code's HTTP hooks: before any
-Gmail draft or send, **Claude Code itself** posts the real tool call to Steward and obeys the
+**Guard the agent's own tools, so it can't skip Steward or lie about an email.** If your agent has its
+own connectors, Steward can sit in front of them through Claude Code's HTTP hooks ([`hook/hook.ts`](../apps/api/src/hook/hook.ts)):
+before any email, chat post, calendar invite or file share, **Claude Code itself** posts the real tool call to Steward and obeys the
 Sentinel (BLOCK = the call never runs, ASK = it asks you in the terminal); after a Gmail read, it posts
 the **raw** emails, which Steward records as unverified input tied to that session. The model decides
 nothing here. Copy the settings from **Connect your agent** into `~/.claude/settings.json`.

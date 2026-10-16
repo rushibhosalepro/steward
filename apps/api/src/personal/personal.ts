@@ -51,6 +51,21 @@ export async function recordAgentTurn(g: Graph, agentId: string, actionId: strin
   );
 }
 
+// The agents working for this user: Steward's own, plus every client that has connected over MCP.
+export async function listAgents(g: Graph) {
+  const res = await g.roQuery<{ id: string; name: string; via: string | null; lastSeen: number | null; actions: number; blocked: number }>(
+    // Aggregate per node first, project properties after: grouping on properties that are null for
+    // the built-in agent (via, last_seen) made FalkorDB 6.0.2 miscount the blocked actions.
+    `MATCH (ag:Agent) WHERE ag.via = 'mcp' OR ag.id = 'a:planner'
+     OPTIONAL MATCH (ag)-[:PROPOSED]->(a:Action)
+     WITH ag, count(a) AS actions, size([v IN collect(a.verdict) WHERE v = 'BLOCK']) AS blocked
+     RETURN ag.id AS id, CASE WHEN ag.id = 'a:planner' THEN 'Steward' ELSE ag.name END AS name,
+            coalesce(ag.via, 'built in') AS via, coalesce(ag.last_seen, 0) AS lastSeen, actions, blocked
+     ORDER BY actions DESC`,
+  );
+  return res.data ?? [];
+}
+
 export type Memory = { id: string; text: string; status: string; by: string | null; about: string[]; ts: number };
 
 export async function proposeMemory(g: Graph, agentId: string, text: string, about: string[] = [], now = Date.now()) {

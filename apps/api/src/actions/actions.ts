@@ -99,20 +99,24 @@ export async function listInbox(g: Graph) {
   return res.data ?? [];
 }
 
-export type ActivityItem = InboxItem & { status: ActionStatus; verdict: Verdict; rationale: string | null; source: string | null };
+export type ActivityItem = InboxItem & { status: ActionStatus; verdict: Verdict; rationale: string | null; source: string | null; byId: string | null; byName: string | null };
 
 // Every action, newest first: the activity feed (what ran, what's waiting, what was blocked).
 export async function listActions(g: Graph, limit = 50) {
   const res = await g.roQuery<ActivityItem>(
+    // Aggregate per action first, then attach the one-to-one neighbours: grouping on many
+    // nullable properties (no target, no step, no proposer) is unreliable in FalkorDB 6.0.2.
     `MATCH (a:Action)
-     OPTIONAL MATCH (a)-[:TARGETS]->(p:Person)
      OPTIONAL MATCH (a)-[:USES]->(d:Document)
+     WITH a, collect(d.title) AS docs
+     OPTIONAL MATCH (a)-[:TARGETS]->(p:Person)
      OPTIONAL MATCH (s:Step)-[:PROPOSES]->(a)
      OPTIONAL MATCH (a)-[:DERIVED_FROM]->(src)
+     OPTIONAL MATCH (by:Agent)-[:PROPOSED]->(a)
      RETURN a.id AS id, a.type AS type, a.status AS status, a.verdict AS verdict, a.reason AS reason,
-            a.created_at AS created_at, a.to AS to, p.name AS target, collect(d.title) AS docs,
+            a.created_at AS created_at, a.to AS to, p.name AS target, docs,
             a.subject AS subject, a.title AS title, s.rationale AS rationale,
-            [l IN labels(src) WHERE l <> 'Entity'][0] AS source
+            [l IN labels(src) WHERE l <> 'Entity'][0] AS source, by.id AS byId, by.name AS byName
      ORDER BY created_at DESC LIMIT $limit`,
     { params: { limit } },
   );

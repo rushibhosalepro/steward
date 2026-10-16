@@ -17,7 +17,7 @@ import { createBaselineMcpServer } from "./mcp/baseline";
 import { authUrl, disconnect, googleConfigured, googleStatus, handleCallback } from "./connectors/google";
 import { computeContexts } from "./contexts/contexts";
 import { createMcpServer } from "./mcp/server";
-import { agentName, brief, decideMemory, listMemories, proposeMemory } from "./personal/personal";
+import { agentName, brief, decideMemory, listAgents, listMemories, proposeMemory } from "./personal/personal";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { decideSuggestion, runScout } from "./scout/scout";
@@ -210,6 +210,7 @@ for (const decision of ["dismiss", "accept", "decline"] as const) {
 // user has asked Steward to remember. Agents propose memories over MCP; confirming one, or adding
 // one yourself, is human-only.
 app.get("/users/:id/brief", async (c) => c.json(await brief(graphFor(c.req.param("id")))));
+app.get("/users/:id/agents", async (c) => c.json(await listAgents(graphFor(c.req.param("id")))));
 app.get("/users/:id/memories", async (c) => c.json(await listMemories(graphFor(c.req.param("id")))));
 app.post("/users/:id/memories", async (c) => {
   const body = await c.req.json<{ text?: string; about?: string[] }>().catch(() => ({ text: undefined, about: undefined }));

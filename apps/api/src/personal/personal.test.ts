@@ -6,7 +6,7 @@ import { graphFor } from "../db";
 import { createMcpServer } from "../mcp/server";
 import { renderContext, retrieve } from "../retrieval/retrieve";
 import { seedDemo } from "../seed/seed";
-import { agentName, brief, decideMemory, listMemories, renderBrief } from "./personal";
+import { agentName, brief, decideMemory, listAgents, listMemories, renderBrief } from "./personal";
 
 const USER = "test_personal";
 const graph = graphFor(USER);
@@ -97,6 +97,15 @@ describe("memory the agent proposes is only used once the user confirms it", () 
     await decideMemory(graph, id, "forgotten");
     expect(renderBrief(await brief(graph))).not.toContain("Priya leads the Atlas launch");
   });
+});
+
+test("the agents list counts each agent's own actions (grouping on null properties miscounted them)", async () => {
+  const blocked = await call("steward_propose_action", { type: "send_email", to: "alex.chen@unknown.example", docs: ["d:atlas-pricing"], derived_from: "msg:alex-1" });
+  expect(blocked.verdict).toBe("BLOCK");
+  const claude = (await listAgents(graph)).find((a) => a.name === "Claude Code");
+  expect(claude).toMatchObject({ via: "mcp", actions: 2, blocked: 1 });
+  const steward = (await listAgents(graph)).find((a) => a.id === "a:planner");
+  expect(steward).toMatchObject({ name: "Steward", via: "built in", blocked: 0 });
 });
 
 test("the agent's name comes from ?agent= or its User-Agent", () => {

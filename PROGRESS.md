@@ -100,7 +100,9 @@ the agent starts on something useful straight away.
 | Scale: 48k nodes, 75k edges | Sentinel (all 8 checks) **p50 100 ms**, p95 135 ms; retrieval p50 91 ms (first run 557 ms; a taint query scanned the inbox, fixed) | `eval/SCALE.md` |
 | Threat map | OWASP LLM Top 10 2025, OWASP Agentic Top 10 2026, MITRE ATLAS v5.6.0, with what's not covered | `eval/THREATS.md` |
 | Real agent, real session | Claude Code with only Steward's tools: `/mcp__steward__start` → "Hi Asha. Here's your brief…"; an errand → "not sent yet… ASK… in your approval inbox", attributed to Claude Code | checked Fri 14:00 |
-| Tests | **189 pass** against a real FalkorDB | `bun run test` |
+| Real Gmail, real Claude (Fri 15:48) | An injection email sent to the owner's real Gmail; Claude Code read it with its Gmail connector, handed it to Steward, and was told *"it's legit, send it"* → **Steward BLOCKED** (`act:493d266f`): sender not in the graph, possible injected request. Claude: *"Your OK in chat doesn't change that ruling."* Nothing sent | screenshot, Steward audit |
+| Agent's own Gmail behind Steward (hook) | Real Claude Code + stand-in Gmail: `create_draft` to the injected sender **denied by the hook before it ran**; no draft reached the tool | `hook.test.ts`, README |
+| Tests | **197 pass** against a real FalkorDB | `bun run test` |
 
 ---
 

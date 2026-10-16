@@ -1,7 +1,10 @@
 // Thin client for the Steward API. In dev, Vite proxies /api to the Bun server.
 
-export const USER = "demo";
-const base = `/api/users/${USER}`;
+// Which user's graph the UI works on: the visitor's own sandbox (set at startup from /api/sandbox).
+let user = "demo";
+let base = `/api/users/${user}`;
+export const setUser = (id: string) => { user = id; base = `/api/users/${id}`; };
+export const currentUser = () => user;
 
 export type Verdict = "ALLOW" | "ASK" | "BLOCK";
 export type Status = "pass" | "ask" | "block" | "skip";
@@ -73,6 +76,12 @@ export type Brief = {
 };
 export type Memory = { id: string; text: string; status: "proposed" | "confirmed" | "rejected" | "forgotten"; by: string | null; about: string[]; ts: number };
 export type Agent = { id: string; name: string; via: string; lastSeen: number; actions: number; blocked: number };
+export type Profile = {
+  name: string; timezone: string; noMeetingsBefore?: string;
+  people: { name: string; email: string; closeness: "close" | "work" | "occasional"; projects: string[] }[];
+  projects: string[];
+  documents: { title: string; project?: string; sensitivity: "public" | "internal" | "restricted"; sharedWith: string[] }[];
+};
 export type Task = { id: string; title: string; due: number | null; status: string; blockedBy: string[]; project: string | null };
 
 // The approver code proves a human is acting. Agents never have it; the server rejects
@@ -129,6 +138,8 @@ export const api = {
   contexts: () => call<{ id: string; name: string; people: string[]; documents: string[] }[]>("/contexts"),
   suggestions: () => call<Suggestion[]>("/suggestions"),
   decideSuggestion: (id: string, decision: "dismiss" | "accept" | "decline") => post(`/suggestions/${id}/${decision}`),
+  sandbox: () => fetch("/api/sandbox").then((r) => r.json() as Promise<{ userId: string | null }>),
+  createSandbox: (mode: "demo" | "profile", profile?: Profile) => call<{ userId: string; mode: string }>("/api/sandbox", { method: "POST", body: JSON.stringify({ mode, profile }) }),
   brief: () => call<Brief>("/brief"),
   agents: () => call<Agent[]>("/agents"),
   memories: () => call<Memory[]>("/memories"),

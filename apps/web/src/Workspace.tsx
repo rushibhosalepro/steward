@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  api, type ActionDetail, type ActivityItem, type Agent, type Brief, type Check, type GoogleStatus, type MailItem, type Meeting,
+  api, currentUser, type ActionDetail, type ActivityItem, type Agent, type Brief, type Check, type GoogleStatus, type MailItem, type Meeting,
   type Memory, type OutboxItem, type PlanResult, type Rule, type Task, type Verdict,
 } from "./api";
 
@@ -122,7 +122,7 @@ function WhyDrawer({ detail, onClose }: { detail: ActionDetail; onClose: () => v
   );
 }
 
-export function Workspace() {
+export function Workspace({ onStartOver }: { onStartOver: () => void }) {
   const [view, setView] = useState<View>("chat");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +146,7 @@ export function Workspace() {
   const [detail, setDetail] = useState<ActionDetail | null>(null);
   const [memoryText, setMemoryText] = useState("");
   const [copied, setCopied] = useState(false);
-  const mcpUrl = `${window.location.origin}/api/users/demo/mcp`;
+  const mcpUrl = `${window.location.origin}/api/users/${currentUser()}/mcp`;
 
   const refresh = useCallback(async () => {
     const [b, a, ag, m, r] = await Promise.all([api.brief(), api.actions(), api.agents(), api.memories(), api.rules()]);
@@ -263,7 +263,8 @@ export function Workspace() {
         <div className="ws-side-foot">
           {audit && <span className={`ws-pill ${audit.ok ? "" : "bad"}`} title="Every verdict, approval and run is hash-chained">{audit.ok ? `audit ✓ ${audit.length}` : "audit broken"}</span>}
           <button className={paused ? "ws-primary" : "ws-ghost"} disabled={busy} onClick={() => guard(async () => { setPaused((await api.setPaused(!paused)).paused); await refresh(); })}>{paused ? "▶ Resume" : "⏸ Pause everything"}</button>
-          <button className="ws-link" disabled={busy} onClick={() => guard(async () => { await api.seed(); setTurns([]); setWhyId(null); await refresh(); })}>Reset demo</button>
+          <button className="ws-link" disabled={busy} onClick={onStartOver} title="Rebuild your sandbox from the demo or from your own details">Start over</button>
+          <span className="ws-muted ws-small" title="Your private sandbox: only this browser can approve here">sandbox {currentUser().slice(4, 10)}</span>
           <a className="ws-link" href="/classic">Classic view</a>
         </div>
       </aside>

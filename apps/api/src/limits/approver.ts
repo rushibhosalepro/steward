@@ -21,10 +21,11 @@ export function isApprover(header: string | undefined, token = APPROVER_TOKEN) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export function humanOnly(token = APPROVER_TOKEN) {
+// `alsoAllow` lets a visitor act as the human of their own sandbox (limits/sandbox.ts).
+export function humanOnly(token = APPROVER_TOKEN, alsoAllow: (c: Context) => boolean = () => false) {
   return async (c: Context, next: Next) => {
     if (c.req.method === "GET" || c.req.method === "OPTIONS") return next();
-    if (!isApprover(c.req.header("x-steward-approver"), token)) {
+    if (!isApprover(c.req.header("x-steward-approver"), token) && !alsoAllow(c)) {
       return c.json({ error: "only a human with the approver code can do this", humanOnly: true }, 403);
     }
     return next();

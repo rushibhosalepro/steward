@@ -1,6 +1,7 @@
 import type { Graph } from "falkordb";
 import { applySchema } from "../graph/schema";
 import { demoWorld, type SeedEdge, type SeedNode } from "./demo";
+import { profileWorld, type Profile } from "./profile";
 
 function groupBy<T>(items: T[], key: (t: T) => string) {
   const out = new Map<string, T[]>();
@@ -10,10 +11,19 @@ function groupBy<T>(items: T[], key: (t: T) => string) {
 
 const SAFE_NAME = /^[A-Z][A-Za-z_]*$/;
 
-// Wipes the user's graph and loads the demo world. Labels and edge types can't be
-// Cypher parameters, so they're checked against SAFE_NAME before being interpolated.
+// Wipes the user's graph and loads the demo world.
 export async function seedDemo(graph: Graph, now = Date.now()) {
-  const { nodes, edges } = demoWorld(now);
+  return loadWorld(graph, demoWorld(now));
+}
+
+// Wipes the user's graph and builds it from their own profile ("Make it yours").
+export async function seedProfile(graph: Graph, profile: Profile, now = Date.now()) {
+  return loadWorld(graph, profileWorld(profile, now));
+}
+
+// Labels and edge types can't be Cypher parameters, so they're checked against SAFE_NAME
+// before being interpolated.
+async function loadWorld(graph: Graph, { nodes, edges }: { nodes: SeedNode[]; edges: SeedEdge[] }) {
 
   try {
     await graph.delete();

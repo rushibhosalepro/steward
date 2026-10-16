@@ -6,9 +6,11 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { isPaused, setPaused, verifyAudit } from "./audit/audit";
 import { humanOnly, isApprover } from "./limits/approver";
+import { newSandboxId, ownsSandbox, sandboxOf, setSandboxCookies } from "./limits/sandbox";
+import { ProfileSchema } from "./seed/profile";
 import { limit, LIMITS, llmBudget } from "./limits/limits";
 import { db, graphFor } from "./db";
-import { seedDemo } from "./seed/seed";
+import { seedDemo, seedProfile } from "./seed/seed";
 import { decide, getAction, isProposedAction, listActions, listInbox, proposeAction } from "./actions/actions";
 import { calendarView, executeAction, outbox, runExecutor, tasksView } from "./executor/executor";
 import { decideRule, listRules } from "./rules/rules";
@@ -34,7 +36,8 @@ app.use("/users/:id/actions", limit("actions", LIMITS.actions));
 app.use("/users/:id/mcp", limit("mcp", LIMITS.actions));
 
 // Human-only routes: the approver code is required (see limits/approver.ts).
-const human = humanOnly();
+// The approver code, or (for a visitor's own sandbox only) the sandbox cookie.
+const human = humanOnly(undefined, (c) => ownsSandbox(c, c.req.param("id")));
 for (const path of [
   "/users/:id/actions/:actionId/approve", "/users/:id/actions/:actionId/reject",
   "/users/:id/rules/:ruleId/*", "/users/:id/pause", "/users/:id/seed",
@@ -78,6 +81,26 @@ app.get("/users/:id/ping", async (c) => {
 });
 
 // Reset the user's graph to the synthetic demo world (and recompute its worlds).
+// A private sandbox per visitor. GET: which sandbox this browser owns (null if none). POST: create
+// it (or rebuild the one it owns) from the demo world or from the visitor's own profile.
+app.use("/sandbox", limit("seed", LIMITS.seed));
+app.get("/sandbox", (c) => c.json({ userId: sandboxOf(c) }));
+app.post("/sandbox", async (c) => {
+  const body = await c.req.json<{ mode?: string; profile?: unknown }>().catch(() => ({ mode: undefined, profile: undefined }));
+  const id = sandboxOf(c) ?? newSandboxId();
+  const g = graphFor(id);
+  if (body.mode === "profile") {
+    const parsed = ProfileSchema.safeParse(body.profile);
+    if (!parsed.success) return c.json({ error: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }, 400);
+    await seedProfile(g, parsed.data);
+  } else {
+    await seedDemo(g);
+  }
+  await computeContexts(g);
+  setSandboxCookies(c, id);
+  return c.json({ userId: id, mode: body.mode === "profile" ? "profile" : "demo" });
+});
+
 app.post("/users/:id/seed", async (c) => {
   const counts = await seedDemo(graphFor(c.req.param("id")));
   await computeContexts(graphFor(c.req.param("id")));

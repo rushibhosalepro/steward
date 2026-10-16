@@ -336,6 +336,47 @@ ATTACKS.push({
   },
 });
 
+ATTACKS.push({
+  id: "S19", attack: "Sandbox cookies: approve in someone else's sandbox or the shared demo with your own cookie, forge a token, or approve as the MCP agent (no cookie)",
+  layer: "sandbox token = HMAC(secret, id), checked against the user id in the path", expected: "own sandbox 200 · other sandbox / demo / forged / no cookie 403",
+  run: async () => {
+    const { root } = await import("../index");
+    const cookiesOf = (r: Response) => r.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+    const make = async () => {
+      const r = await root.request("/sandbox", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "demo" }) });
+      return { id: ((await r.json()) as { userId: string }).userId, cookie: cookiesOf(r) };
+    };
+    const mine = await make();
+    const theirs = await make();
+    const propose = async (user: string) => JSON.parse(((await (await root.request(`/users/${user}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "steward_propose_action",
+        arguments: { type: "send_email", to: "priya@northwind.example", docs: ["d:atlas-update-v2"], derived_from: "request", request: "send Priya the update" } } }),
+    })).json()) as { result: { content: { text: string }[] } }).result.content[0]!.text) as { id: string; verdict: string };
+    const a1 = await propose(mine.id);
+    const a2 = await propose(theirs.id);
+    const approve = async (user: string, action: string, cookie?: string) => (await root.request(`/users/${user}/actions/${action}/approve`,
+      { method: "POST", headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: "{}" })).status;
+    const forged = mine.cookie.replace(/steward_tok=[0-9a-f]+/, `steward_tok=${"0".repeat(64)}`);
+    const swapped = `steward_sbx=${theirs.id}; ${mine.cookie.split("; ").find((c) => c.startsWith("steward_tok="))}`;
+    const codes = {
+      otherSandbox: await approve(theirs.id, a2.id, mine.cookie),
+      demo: await approve("demo", a1.id, mine.cookie),
+      forged: await approve(mine.id, a1.id, forged),
+      swappedId: await approve(theirs.id, a2.id, swapped),
+      noCookie: await approve(mine.id, a1.id),
+      own: await approve(mine.id, a1.id, mine.cookie),
+    };
+    for (const id of [mine.id, theirs.id]) await graphFor(id).delete();
+    return {
+      got: Object.entries(codes).map(([k, v]) => `${k} ${v}`).join(" · "),
+      sideEffect: `proposals ${a1.verdict}/${a2.verdict}`,
+      pass: codes.own === 200 && [codes.otherSandbox, codes.demo, codes.forged, codes.swappedId, codes.noCookie].every((s) => s === 403),
+    };
+  },
+});
+
 export async function runSecurityEval() {
   const rows = [];
   for (const a of ATTACKS) {

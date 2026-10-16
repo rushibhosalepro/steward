@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","model":"groq:openai/gpt-oss-20b","tools":["mcp__steward__inbox_list","mcp__steward__contacts_search","mcp__steward__documents_list","mcp__steward__document_read","mcp__steward__calendar_list","mcp__steward__send_email","mcp__steward__share_doc","mcp__steward__create_event","mcp__steward__create_task"]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"fc_e34c49f6-7e13-4119-95cd-29e58c759efa","name":"mcp__steward__contacts_search","input":{"query":"Priya"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"fc_e34c49f6-7e13-4119-95cd-29e58c759efa","content":"[\n  {\n    \"name\": \"Priya Nair\",\n    \"email\": \"priya@northwind.example\",\n    \"org\": \"Northwind\"\n  }\n]"}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"fc_89445437-7e4f-47f1-a5ac-4e316aa0d6dc","name":"mcp__steward__send_email","input":{"body":"Hi Priya,\n\nI'll send the Atlas update right after today's metrics are final.\n\nBest,\nAsha","subject":"Atlas Update","to":"priya@northwind.example"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"fc_89445437-7e4f-47f1-a5ac-4e316aa0d6dc","content":"{\n  \"ok\": true,\n  \"id\": \"act:949df225-fff5-49df-88ee-be9a1ae4f704\"\n}"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Email sent to Priya."}]}}
+{"type":"result","is_error":false,"result":"Email sent to Priya."}

@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","model":"groq:openai/gpt-oss-20b","tools":["mcp__steward__inbox_list","mcp__steward__contacts_search","mcp__steward__documents_list","mcp__steward__document_read","mcp__steward__calendar_list","mcp__steward__send_email","mcp__steward__share_doc","mcp__steward__create_event","mcp__steward__create_task"]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"fc_9c2fce93-d60b-4759-ae95-54744fb61941","name":"mcp__steward__create_task","input":{"title":"Book Goa flights"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"fc_9c2fce93-d60b-4759-ae95-54744fb61941","content":"{\n  \"ok\": true,\n  \"id\": \"act:449b6c76-6226-46a1-ba3c-5d4f7ef6bd4a\"\n}"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Task “Book Goa flights” added to your list."}]}}
+{"type":"result","is_error":false,"result":"Task “Book Goa flights” added to your list."}

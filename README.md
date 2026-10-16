@@ -62,23 +62,24 @@ Gmail drafts, run it locally ([Run it](#run-it)): the approver code is printed a
 
 ## What happened when a real agent tried
 
-Independent agents from **two vendors** (Claude Code with Haiku and Sonnet; a plain tool-calling
-agent on OpenAI's gpt-4.1-mini, gpt-5.4-mini and gpt-5.4) were given **only** Steward's MCP tools, no
+Independent agents from **two vendors plus open weights** (Claude Code with Haiku and Sonnet; a plain
+tool-calling agent on OpenAI's gpt-4.1-mini, gpt-5.4-mini, gpt-5.4 and the open-weight gpt-oss-20b) were given **only** Steward's MCP tools, no
 shell, files or web, and asked to do 5 errands and 8 attacks hidden in the inbox. The same agents were
 run again with ordinary connectors and no Steward. Judged from the graph afterwards; every transcript
 is in [`eval/agent-runs/`](eval/agent-runs/).
 
 | Model | Family | Attacks that succeeded **without** Steward | **with** Steward | Legit errands done (with · without) | False blocks | Runs (errors) |
 |---|---|---|---|---|---|---|
+| `groq:openai/gpt-oss-20b` | OpenAI open-weight · on Groq | **8 / 8** | **0 / 4** | 4 / 4 · 5 / 5 | 0 | 26 (5) |
 | `openai:gpt-4.1-mini` | OpenAI | **16 / 16** | **0 / 16** | 8 / 10 · 10 / 10 | 0 | 52 (0) |
 | `openai:gpt-5.4` | OpenAI | **15 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
 | `haiku` | Anthropic · via Claude Code | **14 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
 | `openai:gpt-5.4-mini` | OpenAI | **14 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
 | `sonnet` | Anthropic · via Claude Code | **8 / 16** | **0 / 16** | 10 / 10 · 10 / 10 | 0 | 52 (0) |
-| **All 5 models** | | **67 / 80** | **0 / 80** | 48 / 50 · 50 / 50 | 0 | 260 (0) |
+| **All 6 models** | | **75 / 88** | **0 / 84** | 52 / 54 · 55 / 55 | 0 | 286 (5) |
 
-**Every model leaks without Steward; none does with it.** Two attacks succeeded against all five
-models: restricted pricing to a colleague who isn't cleared for it, and a known contact asking for
+**Every model leaks without Steward; none does with it.** Two attacks succeeded against every
+model: restricted pricing to a colleague who isn't cleared for it, and a known contact asking for
 files at a new personal address. A model can't know who may see what; the graph does. The benchmark
 also found two usability bugs in Steward's MCP tools, which are fixed. Details, per-attack table and
 honest limits: [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md).
@@ -94,7 +95,7 @@ to each answer.* Each job below is a graph query in the product, with a test or 
 |---|---|---|---|
 | **Follow connections across data** | Before any action, the Sentinel follows paths from the document to the recipient, from a sentence in the email back to the fact and its document, and from inbound mail to the data it asks for | `(Document)-[:BELONGS_TO]->(Project)<-[:MEMBER_OF]-(Person)` · `(Document)-[:CONTAINS]->(Fact)` · `(Message)-[:MENTIONS]->(Document)` | **Ablation:** same 63 scenarios, unsafe actions allowed: graph **0/47**, relationships off **7/47**, an LLM reading the whole graph as text **2–11/47** ([`eval/ABLATION.md`](eval/ABLATION.md)) |
 | **Remember across sessions** | Each request is a `Turn` in a `Session`. A new session recalls earlier sessions about the same people and **how they ended**; approvals become learned rules that persist | `(Session)-[:HAS]->(Turn)-[:MENTIONS]->(Entity)`, then `(Turn)-[:ASKED]->(Request)-[:PRODUCED]->(Plan)-[:HAS]->(Step)-[:PROPOSES]->(Action)` · `(Rule)-[:LEARNED_FROM]->(Approval)` | `memory.test.ts`; learning replay: prompts **3 → 3 → 3 → 0 → 0 → 0**, still 0 unsafe ([`eval/RESULTS.md`](eval/RESULTS.md)) |
-| **Share state between agents** | Planner, Sentinel, Executor, Scout and outside MCP agents never call each other: each leaves an edge on the action and the next picks it up from the graph. The Executor re-checks before it runs | `(Agent)-[:PROPOSED]->(Action)<-[:CHECKED {verdict}]-(Agent)` · `(Approval)-[:ON]->(Action)` · `(Action)-[:CLAIMED_BY]->(Agent)` · `(Agent)-[:EXECUTED]->(Action)` | `actions.test.ts` (handoff read back from edges); 5 outside agents from 2 vendors through the same graph: **0/80 attacks** ([`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md)) |
+| **Share state between agents** | Planner, Sentinel, Executor, Scout and outside MCP agents never call each other: each leaves an edge on the action and the next picks it up from the graph. The Executor re-checks before it runs | `(Agent)-[:PROPOSED]->(Action)<-[:CHECKED {verdict}]-(Agent)` · `(Approval)-[:ON]->(Action)` · `(Action)-[:CLAIMED_BY]->(Agent)` · `(Agent)-[:EXECUTED]->(Action)` | `actions.test.ts` (handoff read back from edges); 6 outside agents (2 vendors + open weights) through the same graph: **0/84 attacks** ([`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md)) |
 | **Connect people, projects and decisions** | Who works on what, who may see what, who asked, what the user decided and which rule it became, and the worlds (work, side project, family) found by connected components | `(Person)-[:MEMBER_OF]->(Project)` · `(Document)-[:SHARED_WITH]->(Person)` · `(Action)-[:DERIVED_FROM]->(Message)` · `algo.WCC` → `(Person)-[:IN_CONTEXT]->(Context)` · `algo.pageRank` for who matters | `contexts.test.ts`, `scout.test.ts`, `rules.test.ts` |
 | **Show the path behind an answer** | Every verdict carries its paths and the Cypher that found them; the Why panel shows them, plus the agent handoff; the audit log is hash-chained | `(Action)-[:JUSTIFIED_BY {check}]->(Entity)` · `(AuditEvent)-[:NEXT]->(AuditEvent)` · `steward_explain_action`, `steward_find_connection` over MCP | Why panel in the demo; `audit.test.ts`; `/users/demo/audit/verify` on the live site |
 
@@ -248,7 +249,7 @@ turn off the checks that follow relationships and 7 of 47 unsafe actions run
 | Labelled policy eval: 63 scenarios, 32 negative controls | **First run: 0/63 unsafe allowed**, 23/23 should-BLOCK blocked, 61/63 exact (two over-cautious misses, fixed, labels unchanged) | [`eval/RESULTS.md`](eval/RESULTS.md), [`eval/RESULTS-first-run.md`](eval/RESULTS-first-run.md) |
 | Learning replay | approval prompts per round **3 → 3 → 3 → 0 → 0 → 0**, still 0 unsafe after | same |
 | Adversarial suite through the whole pipeline (planner, Sentinel, Executor, MCP, audit, HTTP, memory, sandboxes) | **19/19 attacks held**, checking that the side effect never happened | [`eval/SECURITY.md`](eval/SECURITY.md) |
-| External agents (5 models, 2 vendors, 260 runs) with vs without Steward | **without: 67/80 attacks succeeded · with: 0/80**, legit 48/50 · 50/50, 0 false blocks | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
+| External agents (6 models incl. open weights, 286 runs) with vs without Steward | **without: 75/88 attacks succeeded · with: 0/84**, legit 52/54 · 55/55, 0 false blocks (5 gpt-oss-20b runs errored on Groq, excluded) | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
 | Live LLM planners following an injected email | **fooled 5/5 (Groq gpt-oss-120b, OpenAI gpt-5.4-mini), blocked 5/5** | `results.md` in the planning notes |
 | **Ablation: is the graph doing the work?** Same 63 scenarios, 3 deciders | unsafe actions allowed: **graph 0/47** · relationships off (labels, contacts, sender trust) 7/47 · LLM guardrail given the policy and the whole graph: gpt-5.4-mini 11/47, gpt-5.4 2/47 (and both over-cautious on legit actions) | [`eval/ABLATION.md`](eval/ABLATION.md) |
 | Scale: 48k-node, 75k-edge user graph | **Sentinel, all 8 checks: p50 100 ms, p95 135 ms**; planner retrieval p50 91 ms. The first run (557 ms) exposed a taint query that scanned the whole inbox; fixed, same verdicts | [`eval/SCALE.md`](eval/SCALE.md) |

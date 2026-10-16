@@ -91,8 +91,7 @@ Steward under its own name. It can't approve anything; only you can.
 | Labelled policy eval (63 scenarios, labels written before running) | **0/63 unsafe allowed**, 23/23 should-BLOCK blocked, 63/63 exact (61/63 on the first run; two over-cautious misses fixed) | `eval/RESULTS.md` |
 | Learning replay | approval prompts per round **3 → 3 → 3 → 0 → 0 → 0**, still 0 unsafe | same |
 | Adversarial suite through the whole pipeline | **19/19 attacks held** (incl. self-approval over HTTP, memory poisoning, sandbox cookie misuse) | `eval/SECURITY.md` |
-| External agents, with vs without Steward (5 models, 2 vendors, 260 runs) | **without: 67/80 attacks succeeded · with: 0/80**; legit 48/50 vs 50/50; 0 false blocks. Two attacks beat every model without Steward | `eval/EXTERNAL-AGENT.md` |
-| Open-weight gpt-oss-20b (Groq free tier, partial) | without 7/7, with 0/4; 5 runs errored on Groq's side | `eval/agent-runs/` |
+| External agents, with vs without Steward (6 models incl. open weights, 286 runs) | **without: 75/88 attacks succeeded · with: 0/84**; legit 52/54 vs 55/55; 0 false blocks. Two attacks beat every model without Steward. gpt-oss-20b: 5 "with" runs errored (Groq rejected its tool calls), excluded | `eval/EXTERNAL-AGENT.md` |
 | Ablation: is the graph doing the work? | unsafe allowed: **graph 0/47** · relationships off 7/47 · LLM guardrail with the whole graph as text 11/47 (gpt-5.4-mini), 2/47 (gpt-5.4) | `eval/ABLATION.md` |
 | Scale: 48k nodes, 75k edges | Sentinel (all 8 checks) **p50 100 ms**, p95 135 ms; retrieval p50 91 ms (first run 557 ms; a taint query scanned the inbox, fixed) | `eval/SCALE.md` |
 | Threat map | OWASP LLM Top 10 2025, OWASP Agentic Top 10 2026, MITRE ATLAS v5.6.0, with what's not covered | `eval/THREATS.md` |
@@ -137,7 +136,6 @@ personal layer that turns any agent into your personal agent.
 
 | # | What | Notes |
 |---|---|---|
-| R1 | Finish the gpt-oss-20b row (1 run left) and add it to `EXTERNAL-AGENT.md` | Groq free tier is slow |
 | R3 | Draft the submission text from the form's fields | after you send them (form opens Sat 01:03) |
 | R4 | Final pass: links in incognito, phone width, no secrets in git history, redeploy, reset the demo | Sat night |
 | R5 | Clean up old sandbox graphs (none deleted yet; each is small) | optional |

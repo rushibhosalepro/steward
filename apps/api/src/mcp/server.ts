@@ -9,7 +9,7 @@ import { renderContext, retrieve, searchTerms } from "../retrieval/retrieve";
 import { computeContexts } from "../contexts/contexts";
 import { runScout } from "../scout/scout";
 import { check, type ProposedAction } from "../sentinel/sentinel";
-import { brief, ensureAgent, INSTRUCTIONS, proposeMemory, recordAgentTurn, renderBrief, startPrompt } from "../personal/personal";
+import { brief, ensureAgent, INSTRUCTIONS, NO_WORLD, proposeMemory, recordAgentTurn, renderBrief, startPrompt } from "../personal/personal";
 
 // Steward's graph, as tools any MCP client (Claude Desktop, Claude Code, another agent) can
 // select. Read tools expose graph queries and algorithms; write tools go through the Sentinel.
@@ -72,14 +72,14 @@ export function createMcpServer(userId: string, { guarded = true, agent = "MCP c
   server.registerPrompt("start", {
     title: "Be my personal agent",
     description: "Switch this conversation into your personal agent, working only through Steward, starting from today's brief.",
-  }, async () => ({ messages: [{ role: "user" as const, content: { type: "text" as const, text: await startPrompt(g) } }] }));
+  }, async () => ({ messages: [{ role: "user" as const, content: { type: "text" as const, text: await startPrompt(g, userId) } }] }));
 
   server.registerTool("steward_brief", {
     title: "Brief me on the user",
     description: "Start here. Who the user is, what's coming up, what needs their attention, what's waiting for their approval, what they've taught Steward, and recent sessions (yours and other agents'). This is what makes you their personal agent.",
     inputSchema: {},
     annotations: READ,
-  }, async () => ({ content: [{ type: "text" as const, text: renderBrief(await brief(g)) }] }));
+  }, async () => ({ content: [{ type: "text" as const, text: renderBrief(await brief(g), userId) }] }));
 
   server.registerTool("steward_remember", {
     title: "Ask Steward to remember something",
@@ -241,5 +241,19 @@ export function createMcpServer(userId: string, { guarded = true, agent = "MCP c
     annotations: READ,
   }, async () => json(await runScout(g)));
 
+  return server;
+}
+
+// For an address with no Steward world (a made-up or mistyped sandbox id): the same entry points
+// an agent starts from, each explaining how to connect to the right world. Creates nothing.
+export function createNoWorldServer(site: string) {
+  const text = NO_WORLD(site);
+  const server = new McpServer({ name: "steward", version: "0.2.0" }, { instructions: text });
+  server.registerPrompt("start", { title: "Be my personal agent", description: "No Steward world at this address yet: how to connect the right one." },
+    async () => ({ messages: [{ role: "user" as const, content: { type: "text" as const, text: `Tell me this, in plain words:
+
+${text}` } }] }));
+  server.registerTool("steward_brief", { title: "Brief me on the user", description: "Start here.", inputSchema: {}, annotations: READ },
+    async () => ({ content: [{ type: "text" as const, text }] }));
   return server;
 }

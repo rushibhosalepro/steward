@@ -18,8 +18,8 @@ import { ingestMail, listMail, type InboundMail } from "./ingest/ingest";
 import { createBaselineMcpServer } from "./mcp/baseline";
 import { authUrl, disconnect, googleConfigured, googleStatus, handleCallback } from "./connectors/google";
 import { computeContexts } from "./contexts/contexts";
-import { createMcpServer } from "./mcp/server";
-import { agentName, brief, decideMemory, listAgents, listMemories, proposeMemory } from "./personal/personal";
+import { createMcpServer, createNoWorldServer } from "./mcp/server";
+import { agentName, worldExists, brief, decideMemory, listAgents, listMemories, proposeMemory } from "./personal/personal";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { decideSuggestion, runScout } from "./scout/scout";
@@ -28,6 +28,25 @@ import { check } from "./sentinel/sentinel";
 const app = new Hono();
 
 // Per-IP limits on what costs money or changes state (POSTs only; reads are free).
+// A user id with no world (a made-up or mistyped sandbox address) gets a clear answer instead of
+// a database error, and nothing is created for it. Seeding is how a world comes to exist.
+const known = new Map<string, number>();
+app.use("/users/:id/*", async (c, next) => {
+  const id = c.req.param("id");
+  if (c.req.path.endsWith("/seed") || (known.get(id) ?? 0) > Date.now()) return next();
+  if (await worldExists(graphFor(id))) {
+    known.set(id, Date.now() + 60_000);
+    return next();
+  }
+  const site = new URL(c.req.url).origin;
+  if (c.req.path.endsWith("/mcp")) {
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    await createNoWorldServer(site).connect(transport);
+    return transport.handleRequest(c.req.raw);
+  }
+  return c.json({ error: "no Steward world at this address; open the site and choose Meet your agent or Try the demo", noWorld: true }, 404);
+});
+
 app.use("/users/:id/requests", limit("requests", LIMITS.requests));
 app.use("/users/:id/seed", limit("seed", LIMITS.seed));
 app.use("/users/:id/mail", limit("mail", LIMITS.mail));

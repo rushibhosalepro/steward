@@ -126,3 +126,23 @@ test("the agent's name comes from ?agent= or its User-Agent", () => {
   expect(agentName(null, "claude-code/2.1.0 (cli)")).toBe("Claude Code");
   expect(agentName(undefined, "node")).toBe("MCP client");
 });
+
+test("a made-up sandbox address gets a clear 'no world here' answer, and nothing is created", async () => {
+  const { root } = await import("../index");
+  const fake = "sbx_1a2b3c4d5e6f7a8b";
+  expect((await root.request(`/users/${fake}/brief`)).status).toBe(404);
+  const r = await root.request(`/users/${fake}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "steward_brief", arguments: {} } }),
+  });
+  const text = ((await r.json()) as { result: { content: { text: string }[] } }).result.content[0]!.text;
+  expect(text).toContain("There's no Steward world at this address");
+  expect(text).toContain("Connect your agent");
+  const { worldExists } = await import("./personal");
+  expect(await worldExists(graphFor(fake))).toBe(false);
+});
+
+test("every brief names the world it's connected to", async () => {
+  expect(await call("steward_brief")).toContain(`Connected to Steward, Asha Rao's agent (user ${USER})`);
+});

@@ -147,7 +147,8 @@ export function Workspace({ onStartOver, intro }: { onStartOver: () => void; int
   const [memoryText, setMemoryText] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const mcpUrl = `${window.location.origin}/api/users/${currentUser()}/mcp`;
-  const addCmd = `claude mcp add --transport http steward ${mcpUrl}`;
+  // Replaces any earlier Steward entry (e.g. the shared demo) and works in every project.
+  const addCmd = `claude mcp remove steward -s local; claude mcp remove steward -s user; claude mcp add --scope user --transport http steward ${mcpUrl}`;
   const dedicated = `claude --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{"steward":{"type":"http","url":"${mcpUrl}"}}}'`;
   const copy = (text: string, which: string) => { void navigator.clipboard?.writeText(text); setCopied(which); };
 
@@ -270,13 +271,14 @@ export function Workspace({ onStartOver, intro }: { onStartOver: () => void; int
         <details className="ws-connect">
           <summary>+ Connect your agent</summary>
           <p>Any MCP agent becomes your personal agent: your graph is its memory, Steward's Sentinel is its limits.</p>
+          <p className="ws-world">This world: <b>{agent}</b>, {brief?.user?.name ?? "you"}{currentUser().startsWith("sbx_") ? <> · sandbox <code>{currentUser()}</code></> : null}. Keep the address private: anyone with it can read this sandbox (but never approve).</p>
           <p><b>A dedicated session</b> (Steward's tools only, no shell or files):</p>
           <code>{dedicated}</code>
           <button className="ws-ghost" onClick={() => copy(dedicated, "dedicated")}>{copied === "dedicated" ? "Copied" : "Copy"}</button>
-          <p><b>Or add it</b> to the Claude Code you already use:</p>
+          <p><b>Or use it in every Claude Code session</b> (replaces any earlier Steward):</p>
           <code>{addCmd}</code>
           <button className="ws-ghost" onClick={() => copy(addCmd, "add")}>{copied === "add" ? "Copied" : "Copy"}</button>
-          <p>Then type <code>/mcp__steward__start</code>: it switches the session into your personal agent, starting from today's brief.</p>
+          <p>Then start a <b>new</b> Claude Code session (a running one keeps its old tools) and type <code>/mcp__steward__start</code>. Its first line says which world it's connected to.</p>
         </details>
         <div className="ws-sec">Connected</div>
         <div className="ws-agent"><span className={`ws-live ${google?.connected ? "" : "off"}`} />Gmail drafts &amp; Calendar{google?.connected ? "" : <small> · demo sandbox</small>}</div>

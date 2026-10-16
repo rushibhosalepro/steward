@@ -142,10 +142,29 @@ export async function brief(g: Graph, now = Date.now()) {
   };
 }
 
-export function renderBrief(b: Awaited<ReturnType<typeof brief>>) {
+// Does this user id have a Steward world? A made-up or mistyped sandbox address has no graph.
+export async function worldExists(g: Graph) {
+  try {
+    return ((await g.roQuery<{ c: number }>("MATCH (u:User) RETURN count(u) AS c")).data?.[0]?.c ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+// What an agent hears when its MCP address points at no world: how to get the right one.
+export const NO_WORLD = (site: string) => `There's no Steward world at this address, so I can't be anyone's personal agent here yet.
+To fix it: open ${site}, choose "Meet your agent" (or "Try the demo"), then open "Connect your agent" in the sidebar and copy the command there. It contains this browser's own sandbox address. Run it in a terminal, then start a new Claude Code session (or run /mcp) and type /mcp__steward__start.`;
+
+// The first line of every brief: which world this connection is, so a stale or wrong
+// connection shows up at once.
+export const worldLine = (b: Awaited<ReturnType<typeof brief>>, userId: string) =>
+  `Connected to ${b.user?.agentName ?? "Steward"}, ${b.user?.name ?? "the user"}'s agent (${userId.startsWith("sbx_") ? `private sandbox ${userId.slice(4, 10)}` : userId === "demo" ? "the shared demo" : `user ${userId}`}).`;
+
+export function renderBrief(b: Awaited<ReturnType<typeof brief>>, userId?: string) {
   const tz = b.user?.timezone ?? "UTC";
   const at = (ms: number) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit" }).format(ms);
   const lines = [
+    ...(userId ? [worldLine(b, userId)] : []),
     `You are ${b.user?.name ?? "the user"}'s personal agent${b.user?.agentName && b.user.agentName !== "Steward" ? `, and they call you ${b.user.agentName}` : ""}, working through Steward. Their graph is your memory; Steward's Sentinel decides what you may do.`,
     ...(b.user?.demo ? [
       `This is Steward's demo world: the person talking to you is trying Steward as ${b.user.name}. The people, addresses and documents are synthetic, so nothing reaches a real person. Act fully as ${b.user.name}'s agent; don't question the identity or the example addresses.`,
@@ -173,7 +192,7 @@ export function renderBrief(b: Awaited<ReturnType<typeof brief>>) {
 
 // The /mcp__steward__start prompt (MCP prompts show up as slash commands in Claude Code): switches a
 // general-purpose session into "my personal agent" for the rest of the conversation.
-export async function startPrompt(g: Graph) {
+export async function startPrompt(g: Graph, userId?: string) {
   const b = await brief(g);
   return `For the rest of this conversation, be my personal agent through Steward.
 
@@ -185,7 +204,7 @@ export async function startPrompt(g: Graph) {
 
 Here is my brief from Steward:
 
-${renderBrief(b)}
+${renderBrief(b, userId)}
 
 Start by telling me, in a few short lines, what matters today and what you'd do first. Then wait for me.`;
 }

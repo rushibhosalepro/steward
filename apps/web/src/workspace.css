@@ -169,3 +169,5 @@
 .ob-tool small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .ob-tool input { margin-top: 3px; }
 .ob-summary p { margin: 0 0 6px; }
+.ws-world { background: var(--bg); border-radius: 8px; padding: 6px 8px; }
+.ws-world code { overflow-wrap: anywhere; }

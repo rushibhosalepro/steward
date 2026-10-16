@@ -407,7 +407,7 @@ README now has a section mapping each to the pattern and the proof.
 | Benchmark saves after every run, `--resume` | gpt-oss-20b rerunning on Groq |
 | Tests | **171 pass**; eval 63/63, security 17/17 |
 
-## What's remaining (current, Fri 16 Oct ~09:30) — supersedes the older lists above
+## What's remaining (current, Fri 16 Oct ~08:45) — supersedes the older lists above
 
 Freeze **Sat 17 Oct 09:30 IST** · form opens **Sat 01:03** · submit by **Sun 21:00** · deadline Sun 23:59.
 Freeze scorecard re-scored Fri: **17 / 20** (`../PLAN.md`); the open rows are the video and the tagline.

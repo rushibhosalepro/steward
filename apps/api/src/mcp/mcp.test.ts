@@ -32,11 +32,11 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
 };
 
 describe("the tool surface", () => {
-  test("thirteen tools, and no way to approve or confirm anything", async () => {
+  test("fourteen tools, and no way to approve or confirm anything", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
-      "steward_brief", "steward_check_action", "steward_contexts", "steward_explain_action", "steward_find_connection",
+      "steward_add_email", "steward_brief", "steward_check_action", "steward_contexts", "steward_explain_action", "steward_find_connection",
       "steward_get_context", "steward_get_suggestions", "steward_list_inbox", "steward_propose_action", "steward_remember",
       "steward_run_request", "steward_search", "steward_who_matters",
     ]);

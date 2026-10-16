@@ -15,7 +15,10 @@ const words = (text: string) => new Set(text.toLowerCase().match(/[a-z0-9]+/g) ?
 
 type Candidate = { id: string; label: string; name: string; score: number; superseded: boolean };
 
-export async function ingestMail(g: Graph, mail: InboundMail, now = Date.now()) {
+// `reportedBy`: an agent (over MCP) read this email with its own tools and handed it to Steward.
+// Steward can't verify who really sent it, so it is always unverified input (flagged), whatever
+// sender it names: taint and the Rule of Two apply to anything it asks for.
+export async function ingestMail(g: Graph, mail: InboundMail, now = Date.now(), opts: { reportedBy?: string } = {}) {
   const email = mail.from.email.trim().toLowerCase();
   const text = `${mail.subject}\n${mail.body}`;
   const present = words(text);
@@ -61,17 +64,20 @@ export async function ingestMail(g: Graph, mail: InboundMail, now = Date.now()) 
   // 3. The message itself, linked to its sender and what it mentions.
   const messageId = `msg:${crypto.randomUUID()}`;
   const ask = text.match(ASK)?.[0]?.trim() ?? null;
-  const flagged = !!ask && !sender.known;
+  const flagged = !!opts.reportedBy || (!!ask && !sender.known);
   await g.query(
     `MATCH (p:Person {id: $senderId})
-     CREATE (m:Entity:Message {id: $id, direction: 'inbound', subject: $subject, body: $body, ts: $ts, status: 'received', flagged: $flagged})-[:FROM]->(p)
+     CREATE (m:Entity:Message {id: $id, direction: 'inbound', subject: $subject, body: $body, ts: $ts, status: 'received', flagged: $flagged, via: $via})-[:FROM]->(p)
      WITH m UNWIND $mentions AS mid MATCH (e:Entity {id: mid}) CREATE (m)-[:MENTIONS]->(e)`,
-    { params: { senderId: sender.id, id: messageId, subject: mail.subject, body: mail.body, ts: now, flagged, mentions: mentions.map((m) => m.id) } },
+    { params: { senderId: sender.id, id: messageId, subject: mail.subject, body: mail.body, ts: now, flagged, via: opts.reportedBy ? "agent" : "inbox", mentions: mentions.map((m) => m.id) } },
   );
+  if (opts.reportedBy) {
+    await g.query("MATCH (ag:Agent {id: $agent}), (m:Message {id: $id}) CREATE (ag)-[:REPORTED]->(m)", { params: { agent: opts.reportedBy, id: messageId } });
+  }
 
   // 4. A known contact's request becomes a proposed commitment the user can take on.
   let commitment: { id: string; what: string; about: string[] } | null = null;
-  if (ask && sender.known) {
+  if (ask && sender.known && !opts.reportedBy) {
     const about = mentions.filter((m) => m.label === "Document" || m.label === "Project").map((m) => m.id);
     const id = `c:${crypto.randomUUID()}`;
     await g.query(

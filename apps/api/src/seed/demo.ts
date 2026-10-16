@@ -17,6 +17,11 @@ export function tomorrowAt(now: number, hour: number, minute = 0) {
   return Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate(), hour, minute) - IST_OFFSET;
 }
 
+// The same, `days` from now (0 = today), so due dates read like a person set them ("Sun 18:00").
+export function dayAt(now: number, days: number, hour: number, minute = 0) {
+  return tomorrowAt(now + (days - 1) * DAY, hour, minute);
+}
+
 export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdge[] } {
   const n = (label: string, id: string, props: Props = {}): SeedNode => ({ label, id, props });
   const e = (from: string, type: string, to: string, props?: Props): SeedEdge => ({ from, type, to, props });
@@ -58,13 +63,13 @@ export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdg
     n("Meeting", "m:orbit-standup", { title: "Orbit standup", start: tomorrowAt(now, 15), end: tomorrowAt(now, 15) + HOUR / 2, status: "confirmed" }),
 
     // Tasks
-    n("Task", "t:atlas-metrics", { title: "Finalise Atlas metrics", due: now + DAY / 2, status: "open" }),
+    n("Task", "t:atlas-metrics", { title: "Finalise Atlas metrics", due: tomorrowAt(now, 9), status: "open" }),
     n("Task", "t:atlas-update", { title: "Send Atlas update to Priya", due: tomorrowAt(now, 11), status: "open" }),
-    n("Task", "t:orbit-api", { title: "Ship Orbit API draft", due: now + 3 * DAY, status: "open" }),
+    n("Task", "t:orbit-api", { title: "Ship Orbit API draft", due: dayAt(now, 3, 17), status: "open" }),
 
     // Commitments and preferences
     n("Commitment", "c:priya-update", { what: "Send Priya the Atlas update before our sync", by_when: tomorrowAt(now, 11), status: "open" }),
-    n("Commitment", "c:meera-itinerary", { what: "Share the Goa itinerary with Meera", by_when: now + 2 * DAY, status: "open" }),
+    n("Commitment", "c:meera-itinerary", { what: "Share the Goa itinerary with Meera", by_when: dayAt(now, 2, 18), status: "open" }),
     n("Preference", "pref:no-early", { key: "no_meetings_before", value: "10:00" }),
 
     // Inbox (episodic)

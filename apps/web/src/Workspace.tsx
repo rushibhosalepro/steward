@@ -156,7 +156,7 @@ export function Workspace({ onStartOver, intro }: { onStartOver: () => void; int
   const hookUrl = `${window.location.origin}/api/users/${currentUser()}/hook`;
   const hookSettings = JSON.stringify({
     hooks: {
-      PreToolUse: [{ matcher: "mcp__.*[Mm]ail.*", hooks: [{ type: "http", url: hookUrl, timeout: 15, onFailure: "block" }] }],
+      PreToolUse: [{ matcher: "mcp__.*([Mm]ail|[Ss]lack|[Tt]eams|[Dd]iscord|[Cc]hat|[Cc]alendar|[Ee]vent|[Dd]rive|[Dd]ocs|[Ss]hare).*", hooks: [{ type: "http", url: hookUrl, timeout: 15, onFailure: "block" }] }],
       PostToolUse: [{ matcher: "mcp__.*[Mm]ail.*", hooks: [{ type: "http", url: hookUrl, timeout: 15 }] }],
     },
   }, null, 2);
@@ -288,7 +288,7 @@ export function Workspace({ onStartOver, intro }: { onStartOver: () => void; int
           <p><b>Or use it in every Claude Code session</b> (replaces any earlier Steward):</p>
           <code>{addCmd}</code>
           <button className="ws-ghost" onClick={() => copy(addCmd, "add")}>{copied === "add" ? "Copied" : "Copy"}</button>
-          <p><b>Guard your agent's own Gmail</b> (Claude Code): add this to <code>~/.claude/settings.json</code>. Before any Gmail draft or send, Claude Code itself asks Steward (blocked = it never runs; needs your OK = it asks you); emails it reads are recorded as they really are. The model can't skip it or misreport. Update Claude Code (2.1.295+) so it also blocks if Steward can't be reached.</p>
+          <p><b>Guard your agent's own tools</b> (Claude Code): add this to <code>~/.claude/settings.json</code>. Before any email, chat message, calendar invite or file share from its connectors (Gmail, Slack, Calendar, Drive…), Claude Code itself asks Steward (blocked = it never runs; needs your OK = it asks you); emails it reads are recorded as they really are. The model can't skip it or misreport. Update Claude Code (2.1.295+) so it also blocks if Steward can't be reached.</p>
           <pre className="ws-pre">{hookSettings}</pre>
           <button className="ws-ghost" onClick={() => copy(hookSettings, "hook")}>{copied === "hook" ? "Copied" : "Copy hook settings"}</button>
           <p>Then start a <b>new</b> Claude Code session (a running one keeps its old tools) and type <code>/mcp__steward__start</code>. Its first line says which world it's connected to.</p>

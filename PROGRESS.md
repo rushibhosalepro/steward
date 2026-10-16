@@ -406,3 +406,31 @@ README now has a section mapping each to the pattern and the proof.
 | MCP accepts a Person id as recipient (gpt-oss-20b passed `p:meera`) | `mcp.test.ts` |
 | Benchmark saves after every run, `--resume` | gpt-oss-20b rerunning on Groq |
 | Tests | **171 pass**; eval 63/63, security 17/17 |
+
+## What's remaining (current, Fri 16 Oct ~09:30) — supersedes the older lists above
+
+Freeze **Sat 17 Oct 09:30 IST** · form opens **Sat 01:03** · submit by **Sun 21:00** · deadline Sun 23:59.
+Freeze scorecard re-scored Fri: **17 / 20** (`../PLAN.md`); the open rows are the video and the tagline.
+
+Done since Thursday's lists: deploy, rate limits, security suite, contexts (WCC), conversation memory
+and memory across sessions, pause/audit UI, scale (W4), ablation (W1), OWASP/ATLAS map + stakes (W7),
+external agents on 5 models (W9 as a benchmark), prep-task dedupe (B3).
+
+### Me (before the freeze)
+| # | What | Notes |
+|---|---|---|
+| R1 | gpt-oss-20b (open weights, Groq) row in the external-agent table | running, resumable; Groq free tier ~1–5 min/run |
+| R2 | Offline planner ignores "go through my inbox" (old B4) | only matters when no LLM key / budget spent |
+| R3 | Draft the submission text from the form fields | after you send the fields (Sat 01:03+) |
+| R4 | Final pass: links in incognito, phone width, no secrets in git history, redeploy | night before submitting |
+
+### You
+| # | What | When |
+|---|---|---|
+| Y1 | Open the submission form (Sat 01:03) and send me its fields | Sat |
+| Y2 | Discord: judging criteria, blog-prize rules | now |
+| Y3 | File `../BUGS.md` #1 with FalkorDB (repro ready) | 30 min |
+| Y4 | Fill "What I did myself / verified" in `../AI-DISCLOSURE.md` | before submitting |
+| Y5 | Say the tagline out loud; record the video (open on a BLOCK; show the Why panel: path + handoff) | Sat |
+| Y6 | Blog post under your name | Sat–Sun |
+| Y7 | Decide: rewrite git history to drop the old org id in commit `0337ca7`, or leave it | before submitting |

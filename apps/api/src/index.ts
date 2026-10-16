@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { isPaused, setPaused, verifyAudit } from "./audit/audit";
 import { humanOnly, isApprover } from "./limits/approver";
-import { newSandboxId, ownsSandbox, sandboxOf, setSandboxCookies } from "./limits/sandbox";
+import { isHttps, newSandboxId, ownsSandbox, sandboxOf, setSandboxCookies } from "./limits/sandbox";
 import { ProfileSchema } from "./seed/profile";
 import { limit, LIMITS, llmBudget } from "./limits/limits";
 import { db, graphFor } from "./db";
@@ -38,7 +38,7 @@ app.use("/users/:id/*", async (c, next) => {
     known.set(id, Date.now() + 60_000);
     return next();
   }
-  const site = new URL(c.req.url).origin;
+  const site = `${isHttps(c) ? "https" : "http"}://${new URL(c.req.url).host}`;
   if (c.req.path.endsWith("/mcp")) {
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await createNoWorldServer(site).connect(transport);

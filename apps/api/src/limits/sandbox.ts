@@ -33,8 +33,12 @@ export function ownsSandbox(c: Context, userId: string | undefined) {
   return !!userId && sandboxOf(c) === userId;
 }
 
+// Behind a proxy (Railway ends TLS before the app), the request the app sees is http; the
+// visitor's was https. Trust the proxy's header for that.
+export const isHttps = (c: Context) => (c.req.header("x-forwarded-proto") ?? new URL(c.req.url).protocol.replace(":", "")).split(",")[0]!.trim() === "https";
+
 export function setSandboxCookies(c: Context, id: string) {
-  const opts = { path: "/", httpOnly: true, sameSite: "Lax" as const, secure: new URL(c.req.url).protocol === "https:", maxAge: 7 * 24 * 3600 };
+  const opts = { path: "/", httpOnly: true, sameSite: "Lax" as const, secure: isHttps(c), maxAge: 7 * 24 * 3600 };
   setCookie(c, ID, id, opts);
   setCookie(c, TOKEN, sign(id), opts);
 }

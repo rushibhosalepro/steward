@@ -420,7 +420,7 @@ external agents on 5 models (W9 as a benchmark), prep-task dedupe (B3).
 | # | What | Notes |
 |---|---|---|
 | R1 | gpt-oss-20b (open weights, Groq) row in the external-agent table | running, resumable; Groq free tier ~1–5 min/run |
-| R2 | Offline planner ignores "go through my inbox" (old B4) | only matters when no LLM key / budget spent |
+| R2 | ~~Offline planner ignores "go through my inbox"~~ ✅ `762f6d9`: answers naively, Sentinel BLOCKs Alex | done |
 | R3 | Draft the submission text from the form fields | after you send the fields (Sat 01:03+) |
 | R4 | Final pass: links in incognito, phone width, no secrets in git history, redeploy | night before submitting |
 

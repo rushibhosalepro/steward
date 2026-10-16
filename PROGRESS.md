@@ -311,7 +311,7 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | U2 | ~~Decide where to deploy~~ ✅ Railway: **https://steward-production-8191.up.railway.app** · GitHub push didn't auto-deploy (deployed with `railway up`); check the service's Source → branch / auto-deploy setting | a live URL is "preferred" (FAQ); judges won't run it locally | Thu |
 | U3 | ~~Push to GitHub and make the repo public~~ ✅ **done Thu 13:00**: [github.com/rushibhosalepro/steward](https://github.com/rushibhosalepro/steward), public, `main` tracks `origin/main` | rule 10: a public source repo | done |
 | U4 | **Ask on Discord:** judging criteria, blog-post prize rules, kickoff date | the paying axis is still a guess without criteria | Thu |
-| U5 | Register / team up in the WeMakeDevs panel and look at the **submission form fields** | may ask for things not on any public page | Fri |
+| U5 | ✅ Registered (seen Fri 16 Oct). **Submission form opens Sat 17 Oct 01:03 IST**: open it then and share the fields (title, tagline, links, video, tracks…) so README / video fit them |
 | U6 | Record the **video** (your voice); post the **blog** under your name | rule 13: meaningful participant contribution | Sat–Sun |
 
 ### Build, before the freeze (Sat 09:30)

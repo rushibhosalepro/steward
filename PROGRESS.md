@@ -391,3 +391,18 @@ The dated plan is in `../PLAN.md` → *Re-plan from Thu 13:00*.
 | Bugs the benchmark found in Steward, fixed | dry-run ASK read as "can't" (`6323d5e`); event invitee unclear (`e6bf734`); rate limit applied to "with" only (`dd2562f`) |
 | Groq open-weight gpt-oss-20b / 120b | running (free tier: 8k tokens/min, ~5 min per run); qwen3.8 too large for the free tier |
 | Real xAI Grok | needs `XAI_API_KEY`; then `--model xai:grok-4` |
+
+### Fri 16 Oct morning: the brief's five graph jobs, gaps closed
+
+The hackathon page lists the work the graph has to do: follow connections, remember across sessions,
+share state between agents, connect people/projects/decisions, show the path behind an answer.
+README now has a section mapping each to the pattern and the proof.
+
+| Done | Result |
+|---|---|
+| **Ablation** (`eval/ABLATION.md`): same 63 scenarios, 3 deciders | unsafe allowed: **graph 0/47** · relationships off 7/47 · LLM guardrail with the whole graph as text 11/47 (gpt-5.4-mini), 2/47 (gpt-5.4) |
+| **Memory across sessions** (gap): a new session recalls earlier sessions about the same entities and how they ended, via Turn→Request→Plan→Step→Action | `memory.test.ts` |
+| **Agent handoff trail** (gap): Why panel shows Planner PROPOSED → Sentinel CHECKED → you → Executor CLAIMED_BY / EXECUTED, read from edges | `actions.test.ts`, checked in the browser |
+| MCP accepts a Person id as recipient (gpt-oss-20b passed `p:meera`) | `mcp.test.ts` |
+| Benchmark saves after every run, `--resume` | gpt-oss-20b rerunning on Groq |
+| Tests | **171 pass**; eval 63/63, security 17/17 |

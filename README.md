@@ -41,6 +41,19 @@ honest limits: [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md).
 
 ---
 
+## The brief's five jobs for the graph, and where Steward does each
+
+The brief: *an agent that acts on connected data, remembers what it learns, and can show how it got
+to each answer.* Each job below is a graph query in the product, with a test or an eval behind it.
+
+| Job | What Steward does with FalkorDB | The pattern | Proof |
+|---|---|---|---|
+| **Follow connections across data** | Before any action, the Sentinel follows paths from the document to the recipient, from a sentence in the email back to the fact and its document, and from inbound mail to the data it asks for | `(Document)-[:BELONGS_TO]->(Project)<-[:MEMBER_OF]-(Person)` · `(Document)-[:CONTAINS]->(Fact)` · `(Message)-[:MENTIONS]->(Document)` | **Ablation:** same 63 scenarios, unsafe actions allowed: graph **0/47**, relationships off **7/47**, an LLM reading the whole graph as text **2–11/47** ([`eval/ABLATION.md`](eval/ABLATION.md)) |
+| **Remember across sessions** | Each request is a `Turn` in a `Session`. A new session recalls earlier sessions about the same people and **how they ended**; approvals become learned rules that persist | `(Session)-[:HAS]->(Turn)-[:MENTIONS]->(Entity)`, then `(Turn)-[:ASKED]->(Request)-[:PRODUCED]->(Plan)-[:HAS]->(Step)-[:PROPOSES]->(Action)` · `(Rule)-[:LEARNED_FROM]->(Approval)` | `memory.test.ts`; learning replay: prompts **3 → 3 → 3 → 0 → 0 → 0**, still 0 unsafe ([`eval/RESULTS.md`](eval/RESULTS.md)) |
+| **Share state between agents** | Planner, Sentinel, Executor, Scout and outside MCP agents never call each other: each leaves an edge on the action and the next picks it up from the graph. The Executor re-checks before it runs | `(Agent)-[:PROPOSED]->(Action)<-[:CHECKED {verdict}]-(Agent)` · `(Approval)-[:ON]->(Action)` · `(Action)-[:CLAIMED_BY]->(Agent)` · `(Agent)-[:EXECUTED]->(Action)` | `actions.test.ts` (handoff read back from edges); 5 outside agents from 2 vendors through the same graph: **0/80 attacks** ([`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md)) |
+| **Connect people, projects and decisions** | Who works on what, who may see what, who asked, what the user decided and which rule it became, and the worlds (work, side project, family) found by connected components | `(Person)-[:MEMBER_OF]->(Project)` · `(Document)-[:SHARED_WITH]->(Person)` · `(Action)-[:DERIVED_FROM]->(Message)` · `algo.WCC` → `(Person)-[:IN_CONTEXT]->(Context)` · `algo.pageRank` for who matters | `contexts.test.ts`, `scout.test.ts`, `rules.test.ts` |
+| **Show the path behind an answer** | Every verdict carries its paths and the Cypher that found them; the Why panel shows them, plus the agent handoff; the audit log is hash-chained | `(Action)-[:JUSTIFIED_BY {check}]->(Entity)` · `(AuditEvent)-[:NEXT]->(AuditEvent)` · `steward_explain_action`, `steward_find_connection` over MCP | Why panel in the demo; `audit.test.ts`; `/users/demo/audit/verify` on the live site |
+
 ## How it works
 
 ```
@@ -180,7 +193,9 @@ MATCH p = (a)-[*1..4]-(b) WHERE none(n IN nodes(p) WHERE n:User …) // MCP find
 
 There is no other database. Without FalkorDB the planner has no context, the Sentinel has nothing
 to check against, there is no inbox, outbox, calendar, memory, rule, suggestion, audit trail or MCP
-answer. The graph isn't storage beside the product; it *is* the decision.
+answer. The graph isn't storage beside the product; it *is* the decision. Measured, not claimed:
+turn off the checks that follow relationships and 7 of 47 unsafe actions run
+([`eval/ABLATION.md`](eval/ABLATION.md)).
 
 ## Evidence
 
@@ -191,8 +206,9 @@ answer. The graph isn't storage beside the product; it *is* the decision.
 | Adversarial suite through the whole pipeline (planner, Sentinel, Executor, MCP, audit, HTTP) | **17/17 attacks held**, checking that the side effect never happened | [`eval/SECURITY.md`](eval/SECURITY.md) |
 | External agents (5 models, 2 vendors, 260 runs) with vs without Steward | **without: 67/80 attacks succeeded · with: 0/80**, legit 48/50 · 50/50, 0 false blocks | [`eval/EXTERNAL-AGENT.md`](eval/EXTERNAL-AGENT.md) |
 | Live LLM planners following an injected email | **fooled 5/5 (Groq gpt-oss-120b, OpenAI gpt-5.4-mini), blocked 5/5** | `results.md` in the planning notes |
+| **Ablation: is the graph doing the work?** Same 63 scenarios, 3 deciders | unsafe actions allowed: **graph 0/47** · relationships off (labels, contacts, sender trust) 7/47 · LLM guardrail given the policy and the whole graph: gpt-5.4-mini 11/47, gpt-5.4 2/47 (and both over-cautious on legit actions) | [`eval/ABLATION.md`](eval/ABLATION.md) |
 | Scale: 48k-node, 75k-edge user graph | **Sentinel, all 8 checks: p50 100 ms, p95 135 ms**; planner retrieval p50 91 ms. The first run (557 ms) exposed a taint query that scanned the whole inbox; fixed, same verdicts | [`eval/SCALE.md`](eval/SCALE.md) |
-| 168 automated tests against a real FalkorDB | `bun run test` | |
+| 171 automated tests against a real FalkorDB | `bun run test` | |
 
 **Numbers that proved me wrong**, kept: email matching was case-sensitive, so the first eval run
 blocked Priya written in capitals; the volume check counted its own action (cap 2, not 3); an agent

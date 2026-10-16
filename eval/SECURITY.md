@@ -1,6 +1,6 @@
 # Adversarial evaluation
 
-Run at 2026-10-15T14:07:39.712Z. **17 of 17 attacks held.** Each attack runs through the whole pipeline
+Run at 2026-10-16T03:19:05.227Z. **17 of 17 attacks held.** Each attack runs through the whole pipeline
 (planner → Sentinel → Executor, MCP, audit) with the planner assumed compromised, and each checks both the
 verdict and that the forbidden side effect did not happen. Expected outcomes were written before the run.
 

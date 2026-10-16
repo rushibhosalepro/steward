@@ -144,3 +144,6 @@ details summary { cursor: pointer; margin-top: 4px; }
 .suggestion button { padding: 3px 10px; font-size: 12.5px; }
 .kind-flagged_mail { border-color: var(--block); }
 .kind-commitment_due { border-color: var(--ask); }
+
+.trail { margin: 6px 0 10px; line-height: 1.8; }
+.trail code { font-size: 0.85em; }

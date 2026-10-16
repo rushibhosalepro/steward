@@ -147,9 +147,28 @@ export async function getAction(g: Graph, id: string) {
     "MATCH (ap:Approval)-[:ON]->(a:Action {id: $id}) RETURN ap.decision AS decision, ap.note AS note, ap.ts AS ts ORDER BY ts",
     { params: { id } },
   );
+  // The handoff between agents, as it is stored: each agent leaves an edge on the action, and the
+  // next one picks it up from the graph (no agent calls another directly).
+  const hand = (await g.roQuery<{ proposer: string | null; checker: string | null; verdict: string | null; claimer: string | null; executor: string | null }>(
+    `MATCH (a:Action {id: $id})
+     OPTIONAL MATCH (p:Agent)-[:PROPOSED]->(a)
+     OPTIONAL MATCH (s:Agent)-[c:CHECKED]->(a)
+     OPTIONAL MATCH (a)-[:CLAIMED_BY]->(x:Agent)
+     OPTIONAL MATCH (e:Agent)-[:EXECUTED]->(a)
+     RETURN p.id AS proposer, s.id AS checker, c.verdict AS verdict, x.id AS claimer, e.id AS executor`,
+    { params: { id } },
+  )).data?.[0];
+  const trail = [
+    hand?.proposer && { agent: hand.proposer, edge: "PROPOSED", note: "" },
+    hand?.checker && { agent: hand.checker, edge: "CHECKED", note: hand.verdict ?? "" },
+    ...(decisions.data ?? []).map((d) => ({ agent: "user", edge: "Approval -ON->", note: d.decision })),
+    hand?.claimer && { agent: hand.claimer, edge: "CLAIMED_BY", note: "re-checked before running" },
+    hand?.executor && { agent: hand.executor, edge: "EXECUTED", note: "" },
+  ].filter((x): x is { agent: string; edge: string; note: string } => !!x);
 
   return {
     ...props,
+    trail,
     target: named.data?.[0]?.target ?? null,
     docTitles: named.data?.[0]?.docTitles ?? [],
     checks: JSON.parse(String(checks ?? "[]")) as CheckResult[],

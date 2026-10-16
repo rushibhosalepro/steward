@@ -48,6 +48,16 @@ describe("conversation memory (episodic)", () => {
     expect(ctx.entryPoints.map((e) => e.id)).not.toContain("d:atlas-update-v2");
   });
 
+  test("a new session remembers earlier sessions about the same people, and how they ended", async () => {
+    const ctx = await retrieve(graph, "What did I last send Priya?", 6, "session-next-day-0003");
+    expect(ctx.conversation).toEqual([]);
+    const e = ctx.earlier?.[0];
+    expect(e?.text).toBe("Send Priya the latest Atlas update");
+    expect(e?.about).toContain("Priya Nair");
+    expect(e?.outcomes.join(" ")).toMatch(/send_email (ALLOW|ASK)/);
+    expect(renderContext(ctx)).toContain("earlier sessions about the same people or documents");
+  });
+
   test("sessions are separate, and turns never leak into another user's graph", async () => {
     expect((await retrieve(graph, "send that to Rahul", 6, "session-other-0002")).conversation).toEqual([]);
     const other = graphFor("test_memory_other");

@@ -25,6 +25,8 @@ export type Context = {
   user: { name: string; timezone: string; preferences: { key: string; value: string }[] } | null;
   // Episodic memory: the last few turns of this session and what each was about.
   conversation?: { text: string; mentions: string[] }[];
+  // Long-term memory: earlier sessions about the same people and documents, and how they ended.
+  earlier?: { text: string; ts: number; about: string[]; outcomes: string[] }[];
   cypher: string[];
 };
 
@@ -70,6 +72,16 @@ OPTIONAL MATCH (t)-[:MENTIONS]->(e:Entity)
 RETURN t.text AS text, t.ts AS ts, collect(e.id) AS mentions
 ORDER BY ts DESC LIMIT 3`,
 
+  // Memory across sessions, through the graph: a Turn in another session that was about the same
+  // entities, then (Turn)-[:ASKED]->(Request)-[:PRODUCED]->(Plan)-[:HAS]->(Step)-[:PROPOSES]->(Action)
+  // to what it led to and how that ended (approved, rejected, blocked).
+  earlier: `MATCH (s:Session)-[:HAS]->(t:Turn)-[:MENTIONS]->(e:Entity)
+WHERE e.id IN $ids AND s.id <> $sid
+OPTIONAL MATCH (t)-[:ASKED]->(:Request)-[:PRODUCED]->(:Plan)-[:HAS]->(:Step)-[:PROPOSES]->(a:Action)
+RETURN t.text AS text, t.ts AS ts, collect(DISTINCT coalesce(e.name, e.title, e.id)) AS about,
+       collect(DISTINCT a.type + ' ' + a.verdict + ', ' + a.status) AS outcomes
+ORDER BY ts DESC LIMIT 3`,
+
   byId: `MATCH (e:Entity) WHERE e.id IN $ids AND none(l IN labels(e) WHERE l IN $exclude)
 RETURN e.id AS id, [l IN labels(e) WHERE l <> 'Entity'][0] AS label, coalesce(e.name, e.title, e.subject, e.id) AS name, 0 AS score`,
 
@@ -105,6 +117,7 @@ export async function retrieve(g: Graph, request: string, k = 6, sessionId?: str
   if (!entryPoints.length) return { terms, entryPoints, nodes: [], edges: [], user, conversation, cypher };
 
   const ids = entryPoints.map((e) => e.id);
+  const earlier = (await g.roQuery<NonNullable<Context["earlier"]>[number]>(Q.earlier, { params: { ids, sid: sessionId ?? "" } })).data ?? [];
   const edges = (await g.roQuery<ContextEdge>(Q.expand, { params: { ids, exclude: NOT_CONTEXT } })).data ?? [];
 
   // What the documents in context say, so the planner can write a real update...
@@ -124,7 +137,7 @@ export async function retrieve(g: Graph, request: string, k = 6, sessionId?: str
   });
   const allEdges = [...edges, ...factEdges.filter((f) => !edges.some((e) => e.from === f.from && e.to === f.to && e.rel === f.rel))];
 
-  return { terms, entryPoints, nodes, edges: allEdges.filter((e) => !withheld.has(e.from) && !withheld.has(e.to)), user, conversation, cypher: [...cypher, Q.facts] };
+  return { terms, entryPoints, nodes, edges: allEdges.filter((e) => !withheld.has(e.from) && !withheld.has(e.to)), user, conversation, earlier, cypher: [...cypher, Q.earlier, Q.facts] };
 }
 
 // The compact text form the Planner gets in its prompt: nodes with their ids and key
@@ -139,6 +152,10 @@ export function renderContext(ctx: Context, now = Date.now()) {
   if (ctx.conversation?.length) {
     lines.push("", "recent conversation (oldest first):");
     for (const t of ctx.conversation) lines.push(`- the user said: "${t.text}"${t.mentions.length ? ` (it involved: ${t.mentions.join(", ")})` : ""}`);
+  }
+  if (ctx.earlier?.length) {
+    lines.push("", "earlier sessions about the same people or documents (newest first):");
+    for (const t of ctx.earlier) lines.push(`- ${fmt(t.ts)}: "${t.text}" (about ${t.about.join(", ")})${t.outcomes.length ? `; it led to: ${t.outcomes.join("; ")}` : ""}`);
   }
   lines.push("", "nodes:");
   for (const n of ctx.nodes) {

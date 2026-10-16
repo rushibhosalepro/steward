@@ -34,6 +34,10 @@ const CHECK_LABEL: Record<string, string> = {
   standing_rule: "Standing rule",
 };
 
+const AGENT_LABEL: Record<string, string> = {
+  "a:planner": "Planner", "a:mcp": "Outside agent (MCP)", "a:scout": "Scout", "a:sentinel": "Sentinel", "a:executor": "Executor", user: "You",
+};
+
 const TYPE_LABEL: Record<string, string> = {
   send_email: "Email", share_doc: "Share", create_event: "Event", create_task: "Task",
 };
@@ -325,6 +329,14 @@ export function App() {
                 </div>
                 {detail.derivedFrom && (
                   <p className="small"><span className="muted">Came from:</span> {detail.derivedFrom.label} “{detail.derivedFrom.text}”</p>
+                )}
+                {detail.trail?.length > 0 && (
+                  <div className="trail small" title="Each agent leaves an edge on the action in the graph; the next one picks it up from there.">
+                    <span className="muted">Handoff in the graph:</span>{" "}
+                    {detail.trail.map((t, i) => (
+                      <span key={i}>{i > 0 && " → "}<b>{AGENT_LABEL[t.agent] ?? t.agent}</b> <code>{t.edge}</code>{t.note && ` ${t.note}`}</span>
+                    ))}
+                  </div>
                 )}
                 <ul className="checks">
                   {detail.checks.filter((c) => c.status !== "skip").map((c) => (

@@ -62,6 +62,11 @@ describe("the Priya flow, stored in the graph", () => {
     expect((await getAction(graph, id))?.decisions[0]?.note).toBe("looks right");
   });
 
+  test("the handoff between agents is read back from the graph's edges", async () => {
+    const trail = (await getAction(graph, id))!.trail.map((t) => `${t.agent} ${t.edge} ${t.note}`.trim());
+    expect(trail.slice(0, 3)).toEqual(["a:planner PROPOSED", "a:sentinel CHECKED ASK", "user Approval -ON-> approved"]);
+  });
+
   test("an action can't be decided twice", async () => {
     const r = await decide(graph, id, "rejected");
     expect(r).toEqual({ ok: false, code: 409, error: "action is already approved" });

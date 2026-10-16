@@ -421,6 +421,8 @@ external agents on 5 models (W9 as a benchmark), prep-task dedupe (B3).
 |---|---|---|
 | R1 | gpt-oss-20b (open weights, Groq) row in the external-agent table | running, resumable; Groq free tier ~1–5 min/run |
 | R2 | ~~Offline planner ignores "go through my inbox"~~ ✅ `762f6d9`: answers naively, Sentinel BLOCKs Alex | done |
+| C ✅ | **README "Test it in 3 minutes"** (`ad06033`): 5 steps checked on the live site + MCP one-liner; live demo reset afterwards | done |
+| A, B | Sandbox per visitor (no approver-code wall, no shared state) + "Try it" panel — next, plan in `../judge-demo-plan.html` | ~3.5h |
 | R3 | Draft the submission text from the form fields | after you send the fields (Sat 01:03+) |
 | R4 | Final pass: links in incognito, phone width, no secrets in git history, redeploy | night before submitting |
 

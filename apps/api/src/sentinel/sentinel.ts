@@ -160,6 +160,23 @@ async function informationFlow(g: Graph, a: ProposedAction): Promise<CheckResult
   return { ...base, status, reason, evidence, refs };
 }
 
+// Ablation only (eval/ablation.ts): the same decision from per-document attributes alone, the way
+// a label/ACL system would: an explicit share passes, a restricted label blocks, anything else
+// goes to a known contact. No project path, no version chain.
+async function attributeFlow(g: Graph, a: ProposedAction): Promise<CheckResult> {
+  const base = { check: "information_flow" as const, cypher: [Q.docFlow] };
+  if (!a.docs?.length) return { ...base, status: "skip", reason: "no documents involved", evidence: [] };
+  if (!a.to) return { ...base, status: "block", reason: "documents with no recipient", evidence: [] };
+  for (const doc of a.docs) {
+    const rows = (await g.roQuery<{ title: string; sensitivity: string; sharedWith: string | null }>(Q.docFlow, { params: { doc, email: a.to } })).data ?? [];
+    if (!rows.length) return { ...base, status: "block", reason: `document ${doc} does not exist`, evidence: [] };
+    if (!rows.some((r) => r.sharedWith) && rows[0]!.sensitivity === "restricted") {
+      return { ...base, status: "block", reason: `"${rows[0]!.title}" is restricted and not shared with ${a.to}`, evidence: [] };
+    }
+  }
+  return { ...base, status: "pass", reason: "no restricted label in the way", evidence: [] };
+}
+
 // Leaks through the text, not the attachment: a hijacked planner can type the price into the
 // email instead of attaching the pricing sheet. Every fact the text gives away is traced back
 // to its document, and the same path check decides whether that document may reach the
@@ -339,13 +356,18 @@ export function normalise(a: ProposedAction): ProposedAction {
   return a.to ? { ...a, to: a.to.trim().toLowerCase() } : a;
 }
 
-export async function check(g: Graph, action: ProposedAction): Promise<SentinelResult> {
+// `relationships: false` is the ablation (eval/ablation.ts): the checks that follow paths through
+// the graph (information flow, content flow, Rule of Two taint) are replaced by attribute lookups
+// or switched off. Production never passes it.
+export async function check(g: Graph, action: ProposedAction, opts: { relationships?: boolean } = {}): Promise<SentinelResult> {
   const a = normalise(action);
+  const flat = opts.relationships === false;
+  const off = (check: CheckResult["check"]): CheckResult => ({ check, cypher: [], status: "skip", reason: "ablated: needs relationships", evidence: [] });
   const checks = [
     await knownRecipient(g, a),
-    await informationFlow(g, a),
-    await contentFlow(g, a),
-    await ruleOfTwo(g, a),
+    flat ? await attributeFlow(g, a) : await informationFlow(g, a),
+    flat ? off("content_flow") : await contentFlow(g, a),
+    flat ? off("rule_of_two") : await ruleOfTwo(g, a),
     await provenance(g, a),
     await calendar(g, a),
     await standingRule(g, a),

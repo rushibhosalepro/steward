@@ -424,7 +424,7 @@ external agents on 5 models (W9 as a benchmark), prep-task dedupe (B3).
 | C ✅ | **README "Test it in 3 minutes"** (`ad06033`): 5 steps checked on the live site + MCP one-liner; live demo reset afterwards | done |
 | P1 ✅ | **Personal layer over MCP** (`98141dc`): connect instructions, `steward_brief`, `steward_remember` (proposed → you confirm), each agent named, its work saved as sessions; S18 memory poisoning → **18/18**; 182 tests | done, live |
 | P2 ✅ | **Workspace UI** (`a7606a2`): conversation with Steward's brief, step cards with inline Approve, outside agents (Claude Code) in the same thread, agents sidebar + connect command, right rail (coming up, needs you, Steward remembers + proposed memories), Why drawer with the drawn path; old UI at `/classic`. Live | done |
-| — | Found while building it: FalkorDB 6.0.2 crashes on an aggregation grouped by a null key (`../BUGS.md` #2). **Report privately to security@falkordb.com** (it's a DoS), not as a public issue | you |
+| — | Found a second FalkorDB issue while building it; details are in the private planning notes, to be reported through FalkorDB's private channel | you |
 | A, B | Sandbox per visitor (no approver-code wall, no shared state) + "Try it" panel — next, plan in `../judge-demo-plan.html` | ~3.5h |
 | R3 | Draft the submission text from the form fields | after you send the fields (Sat 01:03+) |
 | R4 | Final pass: links in incognito, phone width, no secrets in git history, redeploy | night before submitting |

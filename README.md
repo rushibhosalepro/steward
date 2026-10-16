@@ -156,6 +156,17 @@ It also uses FalkorDB's full-text index (to find what a request is about), multi
 agent's context), `algo.pageRank` (what matters most today) and `algo.WCC` (the separate "worlds" of
 your life). Every node type, edge and query: [docs/TECHNICAL.md](docs/TECHNICAL.md#graph-data-model).
 
+## We found a bug in FalkorDB, and reported it
+
+While building how Steward learns rules from your approvals, one query quietly returned *nothing*
+when it should have found a row. Old approvals were counted toward a new rule because a "revoked"
+check came back empty. We cut it down to a few lines of Cypher, showed that it works in FalkorDB
+4.22.0 but not in 6.0.2, and filed it:
+**[FalkorDB/FalkorDB#3352](https://github.com/FalkorDB/FalkorDB/issues/3352)** (*6.0.2 regression:
+`OPTIONAL MATCH` with `WHERE` after an aggregating `WITH` returns null*).
+
+Steward works around it by splitting that query in two ([`rules/rules.ts`](apps/api/src/rules/rules.ts)).
+
 ## What it can't do yet (honestly)
 
 - On the public site, Steward can't connect to your own Gmail (Google only lets unverified apps work
@@ -184,7 +195,6 @@ More commands, the evaluations and deployment: [docs/TECHNICAL.md](docs/TECHNICA
 - [How it works, the graph model and the Cypher](docs/TECHNICAL.md)
 - [Real-agent test results](eval/EXTERNAL-AGENT.md) · [Attack tests](eval/SECURITY.md) · [Graph on/off test](eval/ABLATION.md) · [Threat map (OWASP, MITRE ATLAS)](eval/THREATS.md)
 - [What we built, step by step](PROGRESS.md)
-- We found and reported a FalkorDB bug along the way: [FalkorDB/FalkorDB#3352](https://github.com/FalkorDB/FalkorDB/issues/3352)
 
 **AI help:** built with Claude Code as a pair programmer; every result here was run and checked against
 a real FalkorDB. All demo data is made up.

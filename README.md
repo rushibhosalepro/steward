@@ -300,8 +300,9 @@ stay in `.secrets/`, never in the graph.
 FalkorDB (graph, full-text index, `algo.pageRank`, `algo.WCC`, multi-graph per user) · Bun · Hono ·
 React + Vite · the MCP TypeScript SDK · OpenAI / Anthropic / Groq APIs · Railway.
 
-**Upstream:** found and reproduced a FalkorDB 6.0.2 bug (`OPTIONAL MATCH … WHERE` after an aggregating
-`WITH` drops matches); workaround in [`rules/rules.ts`](apps/api/src/rules/rules.ts).
+**Upstream:** found, reproduced and filed a FalkorDB 6.0.2 regression: `OPTIONAL MATCH … WHERE` after an
+aggregating `WITH` returns null (works in 4.22.0): [FalkorDB/FalkorDB#3352](https://github.com/FalkorDB/FalkorDB/issues/3352). Workaround in
+[`rules/rules.ts`](apps/api/src/rules/rules.ts).
 
 **AI assistance (rule 11):** built with Claude Code as a pair programmer. Every graph model, query,
 check and result here was reviewed, run and verified against a real FalkorDB.

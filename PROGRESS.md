@@ -429,7 +429,7 @@ external agents on 5 models (W9 as a benchmark), prep-task dedupe (B3).
 |---|---|---|
 | Y1 | Open the submission form (Sat 01:03) and send me its fields | Sat |
 | Y2 | Discord: judging criteria, blog-prize rules | now |
-| Y3 | File `../BUGS.md` #1 with FalkorDB (repro ready) | 30 min |
+| Y3 | ~~File `../BUGS.md` #1 with FalkorDB~~ ✅ [FalkorDB/FalkorDB#3352](https://github.com/FalkorDB/FalkorDB/issues/3352) (a 6.0.2 regression; works in 4.22.0) | done |
 | Y4 | Fill "What I did myself / verified" in `../AI-DISCLOSURE.md` | before submitting |
 | Y5 | Say the tagline out loud; record the video (open on a BLOCK; show the Why panel: path + handoff) | Sat |
 | Y6 | Blog post under your name | Sat–Sun |

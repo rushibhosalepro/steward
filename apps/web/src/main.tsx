@@ -10,11 +10,15 @@ import "./workspace.css";
 // Every visitor works in their own sandbox. "/" is the personal-agent workspace; "/classic"
 // keeps the original dashboard.
 const classic = window.location.pathname.replace(/\/+$/, "").endsWith("/classic");
+// Owner view: "?user=demo" opens a specific user's workspace (e.g. the one the local Google
+// connector is bound to). Approving there still needs the approver code; nothing else changes.
+const forced = new URLSearchParams(window.location.search).get("user");
 
 function Root() {
   const [state, setState] = useState<"loading" | "welcome" | "ready">("loading");
   const [intro, setIntro] = useState<string | undefined>();
   useEffect(() => {
+    if (forced) { setUser(forced); setState("ready"); return; }
     void api.sandbox()
       .then((s) => { if (s.userId) { setUser(s.userId); setState("ready"); } else setState("welcome"); })
       .catch(() => setState("welcome"));

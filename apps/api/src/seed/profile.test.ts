@@ -9,7 +9,9 @@ const graph = graphFor("test_profile");
 
 beforeAll(async () => {
   await seedProfile(graph, ProfileSchema.parse({
-    name: "Rushi B", timezone: "Asia/Kolkata", noMeetingsBefore: "10:00",
+    name: "Rushi B", timezone: "Asia/Kolkata", noMeetingsBefore: "10:00", agentName: "Juno", focus: "work", wantsConnections: ["gmail"],
+    meeting: { title: "Launch review", start: Date.now() + 26 * 3_600_000, with: "sam@acme.example", project: "Launch" },
+    promise: { what: "Send Sam the launch plan", to: "sam@acme.example", document: "Launch plan", by: Date.now() + 20 * 3_600_000 },
     people: [
       { name: "Sam Ortiz", email: "Sam@Acme.example", closeness: "work", projects: ["Launch"] },
       { name: "Mum", email: "mum@family.example", closeness: "close" },
@@ -30,6 +32,17 @@ test("the brief is about the visitor, not Asha", async () => {
   expect(text).toContain("You are Rushi B's personal agent");
   expect(text).not.toContain("demo world");
   expect(text).toContain("no_meetings_before = 10:00");
+});
+
+test("the agent's name, the meeting and the promise give the first brief something to do", async () => {
+  const b = await brief(graph);
+  expect(b.user).toMatchObject({ agentName: "Juno", focus: "work", wantsConnections: ["gmail"] });
+  expect(renderBrief(b)).toContain("they call you Juno");
+  expect(b.meetings.map((m) => m.title)).toContain("Launch review");
+  const kinds = b.needs.map((n) => n.kind);
+  expect(kinds).toContain("commitment_due");
+  expect(kinds).toContain("meeting_prep");
+  expect(b.needs.find((n) => n.kind === "commitment_due")?.request).toBe("Send Sam the launch plan");
 });
 
 test("the Sentinel works on their own world", async () => {

@@ -66,7 +66,7 @@ export type MailItem = {
 };
 export type Suggestion = { id: string; kind: string; text: string; request: string | null; score: number; why: string; refs: string[] };
 export type Brief = {
-  user: { name: string; timezone: string; preferences: { key: string; value: string }[] } | null;
+  user: { name: string; timezone: string; demo?: boolean; agentName?: string; focus?: string | null; wantsConnections?: string[]; preferences: { key: string; value: string }[] } | null;
   meetings: { title: string; start: number; end: number; with: string[] }[];
   needs: Suggestion[];
   waiting: { id: string; type: string; target: string | null; docs: string[]; reason: string }[];
@@ -78,6 +78,9 @@ export type Memory = { id: string; text: string; status: "proposed" | "confirmed
 export type Agent = { id: string; name: string; via: string; lastSeen: number; actions: number; blocked: number };
 export type Profile = {
   name: string; timezone: string; noMeetingsBefore?: string;
+  agentName?: string; focus?: "work" | "email_calendar" | "personal" | "everything"; wantsConnections: ("gmail" | "calendar" | "drive")[];
+  meeting?: { title: string; start: number; minutes: number; with?: string; project?: string };
+  promise?: { what: string; to: string; document?: string; by?: number };
   people: { name: string; email: string; closeness: "close" | "work" | "occasional"; projects: string[] }[];
   projects: string[];
   documents: { title: string; project?: string; sensitivity: "public" | "internal" | "restricted"; sharedWith: string[] }[];

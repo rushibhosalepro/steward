@@ -122,7 +122,7 @@ function WhyDrawer({ detail, onClose }: { detail: ActionDetail; onClose: () => v
   );
 }
 
-export function Workspace({ onStartOver }: { onStartOver: () => void }) {
+export function Workspace({ onStartOver, intro }: { onStartOver: () => void; intro?: string }) {
   const [view, setView] = useState<View>("chat");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +170,16 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
     void api.action(whyId).then(setDetail).catch((e) => setError(String(e)));
   }, [whyId, activity]);
 
+  // First session after "Meet your agent": say what was learned, then do the most useful thing.
+  const [started, setStarted] = useState(false);
+  useEffect(() => {
+    if (!intro || started || !brief) return;
+    setStarted(true);
+    const first = brief.needs.find((n) => n.request);
+    if (first?.request) void ask(first.request, true);
+  }, [intro, started, brief]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const agent = brief?.user?.agentName ?? "Steward";
   const byId = useMemo(() => new Map(activity.map((a) => [a.id, a])), [activity]);
   const pending = activity.filter((a) => a.status === "pending");
   const proposedMemories = memories.filter((m) => m.status === "proposed");
@@ -183,10 +193,12 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
     return [...turns, ...outside].sort((x, y) => x.ts - y.ts);
   }, [turns, activity]);
 
-  const ask = (request: string) => guard(async () => {
+  // `byAgent`: the agent starts this itself (the first task after onboarding), so it isn't shown
+  // as something the user typed.
+  const ask = (request: string, byAgent = false) => guard(async () => {
     if (!request.trim()) return;
     setView("chat"); setText("");
-    setTurns((t) => [...t, { kind: "user", text: request, ts: Date.now() }]);
+    setTurns((t) => [...t, byAgent ? { kind: "note", text: `Starting with: “${request}”`, ts: Date.now() } : { kind: "user", text: request, ts: Date.now() }]);
     const plan = await api.request(request, undefined, sessionId);
     setTurns((t) => [...t, { kind: "steward", plan, ts: Date.now() }]);
     await refresh();
@@ -240,7 +252,7 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
   return (
     <div className="ws">
       <aside className="ws-side">
-        <div className="ws-brand"><div className="ws-avatar">S</div><div><b>Steward</b><small>{brief?.user?.name ?? "Asha Rao"}'s personal agent</small></div></div>
+        <div className="ws-brand"><div className="ws-avatar">{agent[0]!.toUpperCase()}</div><div><b>{agent}</b><small>{brief?.user?.name ?? "Your"}'s personal agent{agent !== "Steward" ? " · on Steward" : ""}</small></div></div>
         <nav>
           {nav.map(([v, label, n]) => (
             <button key={v} className={`ws-nav ${view === v ? "on" : ""}`} onClick={() => setView(v)}>
@@ -288,9 +300,12 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
         {view === "chat" && (
           <>
             <div className="ws-thread">
+              {intro && (
+                <div className="ws-msg ws-steward"><div className="ws-who">{agent}</div><div className="ws-bubble ws-brief">{intro}</div></div>
+              )}
               {brief && (
                 <div className="ws-msg ws-steward">
-                  <div className="ws-who">Steward · {fmt(Date.now(), { hour: "2-digit", minute: "2-digit" })}</div>
+                  <div className="ws-who">{agent} · {fmt(Date.now(), { hour: "2-digit", minute: "2-digit" })}</div>
                   <div className="ws-bubble ws-brief">
                     {brief.needs.length ? <>Here's what needs you:
                       <ul>{brief.needs.slice(0, 4).map((n) => (
@@ -305,7 +320,7 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
                 if (t.kind === "user") return <div key={i} className="ws-msg ws-me">{t.text}</div>;
                 if (t.kind === "note") return (
                   <div key={i} className="ws-msg ws-steward">
-                    <div className="ws-who">Steward</div>
+                    <div className="ws-who">{agent}</div>
                     <div className="ws-bubble">{t.text}</div>
                     {t.ruleId && rules.find((r) => r.id === t.ruleId)?.status === "proposed" && (
                       <div className="ws-btns">
@@ -326,7 +341,7 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
                 }
                 return (
                   <div key={i} className="ws-msg ws-steward">
-                    <div className="ws-who">Steward{t.plan.planner === "offline" ? " · offline planner" : ""}</div>
+                    <div className="ws-who">{agent}{t.plan.planner === "offline" ? " · offline planner" : ""}</div>
                     <div className="ws-bubble">{reply(t.plan)}</div>
                     {t.plan.steps.map((s) => {
                       const live = byId.get(s.action.id);
@@ -340,7 +355,7 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
             <div className="ws-composer">
               <div className="ws-chips"><span className="ws-muted">Try:</span>{TRY.map((s) => <button key={s} className="ws-chip" disabled={busy} onClick={() => ask(s)}>{s}</button>)}</div>
               <form className="ws-input" onSubmit={(e) => { e.preventDefault(); void ask(text); }}>
-                <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask Steward to do something…" aria-label="Ask Steward" />
+                <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Ask ${agent} to do something…`} aria-label="Ask Steward" />
                 <button className="ws-primary" disabled={busy || !text.trim()}>{busy ? "…" : "Send"}</button>
               </form>
             </div>

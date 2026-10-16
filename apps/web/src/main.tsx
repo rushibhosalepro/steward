@@ -13,14 +13,15 @@ const classic = window.location.pathname.replace(/\/+$/, "").endsWith("/classic"
 
 function Root() {
   const [state, setState] = useState<"loading" | "welcome" | "ready">("loading");
+  const [intro, setIntro] = useState<string | undefined>();
   useEffect(() => {
     void api.sandbox()
       .then((s) => { if (s.userId) { setUser(s.userId); setState("ready"); } else setState("welcome"); })
       .catch(() => setState("welcome"));
   }, []);
   if (state === "loading") return null;
-  if (state === "welcome") return <Welcome onReady={(id) => { setUser(id); setState("ready"); }} />;
-  return classic ? <Classic /> : <Workspace onStartOver={() => setState("welcome")} />;
+  if (state === "welcome") return <Welcome onReady={(id, text) => { setUser(id); setIntro(text); setState("ready"); }} />;
+  return classic ? <Classic /> : <Workspace intro={intro} onStartOver={() => { setIntro(undefined); setState("welcome"); }} />;
 }
 
 createRoot(document.getElementById("root")!).render(

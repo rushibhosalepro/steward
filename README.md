@@ -25,8 +25,11 @@ the model is the only thing deciding, whoever writes to your inbox is deciding t
 Open the **[live demo](https://steward-production-8191.up.railway.app)** (no login, no key). You get
 **your own private sandbox**: your own graph, and only your browser can approve in it, so press
 Approve freely. Choose **Try the demo** (Asha's world: colleagues, projects, a restricted pricing
-sheet and an inbox that already holds an injected email from a stranger, Alex) or **Make it yours**
-(type your own people, projects and documents, and Steward works on your world instead).
+sheet and an inbox that already holds an injected email from a stranger, Alex) or **Meet your agent**:
+name it, tell it about your people, projects, a meeting and a promise (every step skippable), see what
+each tool connection would and wouldn't allow (nothing is connected or authorised by choosing), and
+it starts straight away on the most useful thing, e.g. *"Starting with: Send Lena the launch plan"* →
+**Needs your OK**.
 
 In the demo, click a **Try** suggestion under the message box (or type it), then **Why?** on any card
 to see the path in the graph, the checks and the Cypher. (The original dashboard is at

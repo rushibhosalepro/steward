@@ -33,7 +33,9 @@ personal agent": it starts from your brief, acts only through Steward, and its a
 Steward under its own name. It can't approve anything; only you can.
 
 **Anyone can try it as themselves.** Each visitor gets a private sandbox: try Asha's demo world, or
-**Make it yours** (your own people, projects and documents become the graph).
+**Meet your agent**: a short conversation (your name, your agent's name, your people, projects, a
+meeting and a promise, which tools you'd connect and what each would allow) becomes your graph, and
+the agent starts on something useful straight away.
 
 ---
 
@@ -46,6 +48,7 @@ Steward under its own name. It can't approve anything; only you can.
 | Thu 13:10–14:00 | **Security**: fact-level information flow + context firewall, taint + Meta's Rule of Two, rules as scoped capabilities + volume cap, hash-chained audit + kill switch; Railway deploy; rate limits; adversarial suite; **closed a real bypass** (an agent could approve itself over plain HTTP) | `ebfe717` … `35a5d0d` |
 | Thu 14:00–20:45 | **"Is it real?"**: external-agent benchmark (Claude Code, then OpenAI models) with a fair no-Steward baseline; real Gmail drafts + Google Calendar; conversation memory; worlds (WCC); scale test; README | `cfcae72` … `9a13f3c` |
 | Fri 08:20–10:55 | **Proof and polish**: ablation (graph vs no relationships vs LLM guardrail), memory across sessions, agent handoff trail, the brief's five graph jobs mapped, OWASP/ATLAS threat map, FalkorDB issue filed, 3-minute judge path | `698d980` … `ad06033` |
+| Fri 14:05–14:35 | **Onboarding**: "Meet your agent" as a conversation, honest tool-consent screen, first useful task on its own | see git log |
 | Fri 12:35–14:05 | **Personal agent for any agent**: brief / remember / named agents over MCP; workspace UI; private sandbox per visitor + *Make it yours*; `/mcp__steward__start` | `98141dc` … `e99c498` |
 
 ---
@@ -66,6 +69,7 @@ Steward under its own name. It can't approve anything; only you can.
 | **MCP** | 13 tools + the `start` prompt. Connect instructions make the client the user's agent; `steward_brief`, `steward_remember`; every client is its own named Agent; **no approve or confirm tool** | `mcp/server.ts`, `personal/personal.ts` |
 | **Agent handoff** | Agents never call each other; each leaves an edge on the action: PROPOSED → CHECKED → Approval → CLAIMED_BY → EXECUTED | `actions/actions.ts` |
 | **Audit + kill switch** | Hash-chained AuditEvents (`/audit/verify`); Pause stops everything | `audit/audit.ts` |
+| **Onboarding** | *Meet your agent*: name, agent name, focus, people, documents, a meeting, a promise, preferences, tool preferences with what each would allow (connecting never approves an action). Ends with what it learned and the first task, run through the Sentinel | `apps/web/src/Onboarding.tsx`, `seed/profile.ts` |
 | **Sandboxes** | Private graph per visitor; approve with a signed httpOnly cookie, for your own sandbox only; *Make it yours* builds the graph from a short form | `limits/sandbox.ts`, `seed/profile.ts` |
 | **Workspace UI** | Steward talks to you: brief first, step cards with inline Approve, outside agents in the same thread, Why drawer with the path drawn, "Steward remembers", connect-your-agent commands. Old dashboard at `/classic` | `apps/web/src/` |
 | **Limits** | Per-IP rate limits, daily LLM budget, human-only routes behind the approver code or your sandbox cookie | `limits/` |
@@ -96,7 +100,7 @@ Steward under its own name. It can't approve anything; only you can.
 | Scale: 48k nodes, 75k edges | Sentinel (all 8 checks) **p50 100 ms**, p95 135 ms; retrieval p50 91 ms (first run 557 ms; a taint query scanned the inbox, fixed) | `eval/SCALE.md` |
 | Threat map | OWASP LLM Top 10 2025, OWASP Agentic Top 10 2026, MITRE ATLAS v5.6.0, with what's not covered | `eval/THREATS.md` |
 | Real agent, real session | Claude Code with only Steward's tools: `/mcp__steward__start` → "Hi Asha. Here's your brief…"; an errand → "not sent yet… ASK… in your approval inbox", attributed to Claude Code | checked Fri 14:00 |
-| Tests | **188 pass** against a real FalkorDB | `bun run test` |
+| Tests | **189 pass** against a real FalkorDB | `bun run test` |
 
 ---
 
@@ -148,6 +152,6 @@ personal layer that turns any agent into your personal agent.
 | Y2 | Discord: judging criteria and blog-prize rules | now |
 | Y3 | Report the second FalkorDB issue **privately** (repro in `../BUGS.md` #2) | before submitting |
 | Y4 | Fill in "What I did myself / verified" in `../AI-DISCLOSURE.md` | before submitting |
-| Y5 | Record the video: open on a BLOCK; show `/mcp__steward__start` in Claude Code, the errand landing in Steward as "needs your OK", the Why drawer, and *Make it yours* | Sat |
+| Y5 | Record the video: open on a BLOCK; show *Meet your agent* ending on a first task, `/mcp__steward__start` in Claude Code, the errand landing in Steward as "needs your OK", the Why drawer, and *Make it yours* | Sat |
 | Y6 | Blog post under your name | Sat–Sun |
 | Y7 | Decide on rewriting git history (old org id in `0337ca7`; the issue wording in `226fbeb`) | before submitting |

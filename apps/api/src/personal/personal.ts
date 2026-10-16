@@ -108,10 +108,11 @@ export async function decideMemory(g: Graph, id: string, decision: "confirmed" |
 // One call that makes an agent personal: who the user is, what's on, what needs them, what is
 // waiting for their OK, what they've taught Steward, and what happened in recent sessions.
 export async function brief(g: Graph, now = Date.now()) {
-  const user = (await g.roQuery<{ name: string; tz: string; demo: boolean; prefs: { key: string; value: string }[] }>(
+  const user = (await g.roQuery<{ name: string; tz: string; demo: boolean; agentName: string; focus: string | null; wants: string[]; prefs: { key: string; value: string }[] }>(
     `MATCH (u:User) OPTIONAL MATCH (u)-[:PREFERS]->(p:Preference)
      WITH u, collect({key: p.key, value: p.value}) AS prefs
-     RETURN u.name AS name, u.timezone AS tz, coalesce(u.demo, false) AS demo, prefs`,
+     RETURN u.name AS name, u.timezone AS tz, coalesce(u.demo, false) AS demo, coalesce(u.agent_name, 'Steward') AS agentName,
+            u.focus AS focus, coalesce(u.wants_connections, []) AS wants, prefs`,
   )).data?.[0];
   const tz = user?.tz ?? "UTC";
   const meetings = (await g.roQuery<{ title: string; start: number; end: number; with: string[] }>(
@@ -135,7 +136,7 @@ export async function brief(g: Graph, now = Date.now()) {
      ORDER BY ts DESC LIMIT 5`,
   )).data ?? [];
   return {
-    user: user ? { name: user.name, timezone: tz, demo: user.demo, preferences: user.prefs.filter((p) => p.key) } : null,
+    user: user ? { name: user.name, timezone: tz, demo: user.demo, agentName: user.agentName, focus: user.focus, wantsConnections: user.wants, preferences: user.prefs.filter((p) => p.key) } : null,
     meetings, needs, waiting: waiting.map((w) => ({ id: w.id, type: w.type, target: w.target, docs: w.docs, reason: w.reason })),
     rules: rules.map((r) => r.description), memories: memories.map((m) => ({ text: m.text, about: m.about })), recent,
   };
@@ -145,7 +146,7 @@ export function renderBrief(b: Awaited<ReturnType<typeof brief>>) {
   const tz = b.user?.timezone ?? "UTC";
   const at = (ms: number) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", hour: "2-digit", minute: "2-digit" }).format(ms);
   const lines = [
-    `You are ${b.user?.name ?? "the user"}'s personal agent, working through Steward. Their graph is your memory; Steward's Sentinel decides what you may do.`,
+    `You are ${b.user?.name ?? "the user"}'s personal agent${b.user?.agentName && b.user.agentName !== "Steward" ? `, and they call you ${b.user.agentName}` : ""}, working through Steward. Their graph is your memory; Steward's Sentinel decides what you may do.`,
     ...(b.user?.demo ? [
       `This is Steward's demo world: the person talking to you is trying Steward as ${b.user.name}. The people, addresses and documents are synthetic, so nothing reaches a real person. Act fully as ${b.user.name}'s agent; don't question the identity or the example addresses.`,
     ] : []),

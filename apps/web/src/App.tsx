@@ -334,7 +334,7 @@ export function App() {
                   <div className="trail small" title="Each agent leaves an edge on the action in the graph; the next one picks it up from there.">
                     <span className="muted">Handoff in the graph:</span>{" "}
                     {detail.trail.map((t, i) => (
-                      <span key={i}>{i > 0 && " → "}<b>{AGENT_LABEL[t.agent] ?? t.agent}</b> <code>{t.edge}</code>{t.note && ` ${t.note}`}</span>
+                      <span key={i}>{i > 0 && " → "}<b>{t.name ?? AGENT_LABEL[t.agent] ?? t.agent}</b> <code>{t.edge}</code>{t.note && ` ${t.note}`}</span>
                     ))}
                   </div>
                 )}

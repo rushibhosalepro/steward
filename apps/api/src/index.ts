@@ -17,6 +17,7 @@ import { createBaselineMcpServer } from "./mcp/baseline";
 import { authUrl, disconnect, googleConfigured, googleStatus, handleCallback } from "./connectors/google";
 import { computeContexts } from "./contexts/contexts";
 import { createMcpServer } from "./mcp/server";
+import { agentName, brief, decideMemory, listMemories, proposeMemory } from "./personal/personal";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { decideSuggestion, runScout } from "./scout/scout";
@@ -37,7 +38,7 @@ const human = humanOnly();
 for (const path of [
   "/users/:id/actions/:actionId/approve", "/users/:id/actions/:actionId/reject",
   "/users/:id/rules/:ruleId/*", "/users/:id/pause", "/users/:id/seed",
-  "/users/:id/suggestions/:sid/*", "/users/:id/mail",
+  "/users/:id/suggestions/:sid/*", "/users/:id/mail", "/users/:id/memories", "/users/:id/memories/*",
   "/connectors/google/start", "/connectors/google/disconnect",
 ]) app.use(path, human);
 
@@ -205,6 +206,23 @@ for (const decision of ["dismiss", "accept", "decline"] as const) {
   });
 }
 
+// The personal layer: the brief any agent (or Steward's home screen) starts from, and what the
+// user has asked Steward to remember. Agents propose memories over MCP; confirming one, or adding
+// one yourself, is human-only.
+app.get("/users/:id/brief", async (c) => c.json(await brief(graphFor(c.req.param("id")))));
+app.get("/users/:id/memories", async (c) => c.json(await listMemories(graphFor(c.req.param("id")))));
+app.post("/users/:id/memories", async (c) => {
+  const body = await c.req.json<{ text?: string; about?: string[] }>().catch(() => ({ text: undefined, about: undefined }));
+  if (!body.text?.trim()) return c.json({ error: "need { text }" }, 400);
+  return c.json(await proposeMemory(graphFor(c.req.param("id")), "user", body.text.trim(), body.about ?? []));
+});
+for (const decision of ["confirmed", "rejected", "forgotten"] as const) {
+  app.post(`/users/:id/memories/:mid/${decision === "confirmed" ? "confirm" : decision === "rejected" ? "reject" : "forget"}`, async (c) => {
+    const r = await decideMemory(graphFor(c.req.param("id")), c.req.param("mid"), decision);
+    return r.ok ? c.json(r) : c.json({ error: r.error }, 409);
+  });
+}
+
 // Evaluation baseline only: the same MCP tools with no Sentinel, for the "without Steward"
 // condition of the external-agent benchmark. Off unless STEWARD_ALLOW_UNGUARDED=1.
 if (process.env.STEWARD_ALLOW_UNGUARDED === "1") {
@@ -218,7 +236,7 @@ if (process.env.STEWARD_ALLOW_UNGUARDED === "1") {
 // MCP over Streamable HTTP, stateless: a fresh server + transport per request, scoped to the user.
 app.all("/users/:id/mcp", async (c) => {
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  await createMcpServer(c.req.param("id")).connect(transport);
+  await createMcpServer(c.req.param("id"), { agent: agentName(c.req.query("agent"), c.req.header("user-agent")) }).connect(transport);
   return transport.handleRequest(c.req.raw);
 });
 

@@ -149,22 +149,22 @@ export async function getAction(g: Graph, id: string) {
   );
   // The handoff between agents, as it is stored: each agent leaves an edge on the action, and the
   // next one picks it up from the graph (no agent calls another directly).
-  const hand = (await g.roQuery<{ proposer: string | null; checker: string | null; verdict: string | null; claimer: string | null; executor: string | null }>(
+  const hand = (await g.roQuery<{ proposer: string | null; proposerName: string | null; checker: string | null; verdict: string | null; claimer: string | null; executor: string | null }>(
     `MATCH (a:Action {id: $id})
      OPTIONAL MATCH (p:Agent)-[:PROPOSED]->(a)
      OPTIONAL MATCH (s:Agent)-[c:CHECKED]->(a)
      OPTIONAL MATCH (a)-[:CLAIMED_BY]->(x:Agent)
      OPTIONAL MATCH (e:Agent)-[:EXECUTED]->(a)
-     RETURN p.id AS proposer, s.id AS checker, c.verdict AS verdict, x.id AS claimer, e.id AS executor`,
+     RETURN p.id AS proposer, p.name AS proposerName, s.id AS checker, c.verdict AS verdict, x.id AS claimer, e.id AS executor`,
     { params: { id } },
   )).data?.[0];
   const trail = [
-    hand?.proposer && { agent: hand.proposer, edge: "PROPOSED", note: "" },
+    hand?.proposer && { agent: hand.proposer, edge: "PROPOSED", note: "", ...(hand.proposer.startsWith("a:mcp:") && hand.proposerName ? { name: `${hand.proposerName} (via MCP)` } : {}) },
     hand?.checker && { agent: hand.checker, edge: "CHECKED", note: hand.verdict ?? "" },
     ...(decisions.data ?? []).map((d) => ({ agent: "user", edge: "Approval -ON->", note: d.decision })),
     hand?.claimer && { agent: hand.claimer, edge: "CLAIMED_BY", note: "re-checked before running" },
     hand?.executor && { agent: hand.executor, edge: "EXECUTED", note: "" },
-  ].filter((x): x is { agent: string; edge: string; note: string } => !!x);
+  ].filter((x): x is { agent: string; edge: string; note: string; name?: string } => !!x);
 
   return {
     ...props,

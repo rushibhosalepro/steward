@@ -29,7 +29,7 @@ export type ActionDetail = {
   derivedFrom: { label: string; text: string } | null;
   justifiedBy: { check: string; status: Status; label: string; name: string }[];
   decisions: { decision: string; note: string | null; ts: number }[];
-  trail: { agent: string; edge: string; note: string }[];
+  trail: { agent: string; edge: string; note: string; name?: string }[];
 };
 
 export type PlanStep = {

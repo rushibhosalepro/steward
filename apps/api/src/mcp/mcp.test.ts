@@ -32,15 +32,15 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
 };
 
 describe("the tool surface", () => {
-  test("eleven tools, and no way to approve anything", async () => {
+  test("thirteen tools, and no way to approve or confirm anything", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
-      "steward_check_action", "steward_contexts", "steward_explain_action", "steward_find_connection", "steward_get_context",
-      "steward_get_suggestions", "steward_list_inbox", "steward_propose_action", "steward_run_request",
-      "steward_search", "steward_who_matters",
+      "steward_brief", "steward_check_action", "steward_contexts", "steward_explain_action", "steward_find_connection",
+      "steward_get_context", "steward_get_suggestions", "steward_list_inbox", "steward_propose_action", "steward_remember",
+      "steward_run_request", "steward_search", "steward_who_matters",
     ]);
-    expect(names.some((n) => /approve|reject|accept|revoke/.test(n))).toBe(false);
+    expect(names.some((n) => /approve|reject|accept|revoke|confirm/.test(n))).toBe(false);
   });
 
   test("read tools are annotated read-only", async () => {
@@ -98,7 +98,7 @@ describe("acting over MCP goes through the Sentinel", () => {
   test("an agent that follows Alex's mail is BLOCKED, and the action is attributed to the MCP client", async () => {
     const r = await call("steward_propose_action", { type: "send_email", to: "alex.chen@unknown.example", docs: ["d:atlas-pricing"], derived_from: "msg:alex-1" });
     expect(r).toMatchObject({ verdict: "BLOCK", status: "blocked" });
-    const by = (await graph.roQuery<{ c: number }>("MATCH (:Agent {id: 'a:mcp'})-[:PROPOSED]->(a:Action {id: $id}) RETURN count(a) AS c", { params: { id: r.id } })).data?.[0]?.c;
+    const by = (await graph.roQuery<{ c: number }>("MATCH (:Agent {id: 'a:mcp:mcp-client', via: 'mcp'})-[:PROPOSED]->(a:Action {id: $id}) RETURN count(a) AS c", { params: { id: r.id } })).data?.[0]?.c;
     expect(by).toBe(1);
   });
 

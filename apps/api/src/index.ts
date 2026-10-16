@@ -19,7 +19,8 @@ import { createBaselineMcpServer } from "./mcp/baseline";
 import { authUrl, disconnect, googleConfigured, googleStatus, handleCallback } from "./connectors/google";
 import { computeContexts } from "./contexts/contexts";
 import { createMcpServer, createNoWorldServer } from "./mcp/server";
-import { agentName, worldExists, brief, decideMemory, listAgents, listMemories, proposeMemory } from "./personal/personal";
+import { handleHook } from "./hook/hook";
+import { agentName, ensureAgent, worldExists, brief, decideMemory, listAgents, listMemories, proposeMemory } from "./personal/personal";
 import { availablePlanners, choosePlanner, planRequest } from "./planner/plan";
 import { renderContext, retrieve } from "./retrieval/retrieve";
 import { decideSuggestion, runScout } from "./scout/scout";
@@ -265,6 +266,16 @@ for (const decision of ["confirmed", "rejected", "forgotten"] as const) {
     return r.ok ? c.json(r) : c.json({ error: r.error }, 409);
   });
 }
+
+// Claude Code hooks (or any host that can run a command around tool calls): the agent's own email
+// tools are checked by the Sentinel before they run, and emails they read are recorded. See
+// hook/hook.ts. Always answers 200 with the hook's JSON; an unknown event is a no-op.
+app.use("/users/:id/hook", limit("hook", LIMITS.actions));
+app.post("/users/:id/hook", async (c) => {
+  const input = await c.req.json().catch(() => ({}));
+  const g = graphFor(c.req.param("id"));
+  return c.json(await handleHook(g, input, await ensureAgent(g, c.req.query("agent") ?? "Claude Code")));
+});
 
 // Evaluation baseline only: the same MCP tools with no Sentinel, for the "without Steward"
 // condition of the external-agent benchmark. Off unless STEWARD_ALLOW_UNGUARDED=1.

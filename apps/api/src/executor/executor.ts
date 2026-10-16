@@ -74,6 +74,16 @@ async function perform(g: Graph, a: ActionProps, ts: number): Promise<string> {
     return produced;
   }
 
+  // The same request run twice ("prep for tomorrow's sync") shouldn't leave two identical open
+  // tasks: the action is linked to the task that's already there.
+  const same = (await g.roQuery<{ id: string }>(
+    "MATCH (t:Task {status: 'open'}) WHERE toLower(t.title) = toLower($title) RETURN t.id AS id LIMIT 1",
+    { params: { title: a.title ?? "Untitled task" } },
+  )).data?.[0];
+  if (same) {
+    await g.query("MATCH (a:Action {id: $id}), (t:Task {id: $tid}) CREATE (a)-[:PRODUCED]->(t)", { params: { id: a.id, tid: same.id } });
+    return same.id;
+  }
   await g.query(
     `MATCH (a:Action {id: $id})
      CREATE (t:Entity:Task {id: $produced, title: $title, status: 'open'})

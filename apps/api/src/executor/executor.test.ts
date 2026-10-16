@@ -131,6 +131,15 @@ describe("calendar and tasks", () => {
     expect(tasks.find((t) => t.title === "Book Goa flights")?.status).toBe("open");
   });
 
+  test("the same task asked for twice stays one task", async () => {
+    await proposeAction(graph, { type: "create_task", title: "book goa flights", derivedFrom: "user" });
+    await runExecutor(graph);
+    const n = await one<{ c: number }>("MATCH (t:Task) WHERE toLower(t.title) = 'book goa flights' RETURN count(t) AS c");
+    expect(n?.c).toBe(1);
+    const linked = await one<{ c: number }>("MATCH (:Action)-[:PRODUCED]->(t:Task) WHERE toLower(t.title) = 'book goa flights' RETURN count(*) AS c");
+    expect(linked?.c).toBe(2);
+  });
+
   test("the task list shows what blocks what", async () => {
     const tasks = (await tasksView(graph)) as { title: string; blockedBy: string[] }[];
     expect(tasks.find((t) => t.title === "Send Atlas update to Priya")?.blockedBy).toEqual(["Finalise Atlas metrics"]);

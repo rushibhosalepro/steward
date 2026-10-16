@@ -18,7 +18,7 @@ export type Check = {
 export type ActivityItem = {
   id: string; type: string; status: string; verdict: Verdict; reason: string; created_at: number;
   to: string | null; target: string | null; docs: string[]; subject: string | null; title: string | null;
-  rationale: string | null; source: string | null;
+  rationale: string | null; source: string | null; byId: string | null; byName: string | null;
 };
 
 export type ActionDetail = {
@@ -62,6 +62,17 @@ export type MailItem = {
   from: string; email: string; known: boolean; mentions: string[]; asks: string[];
 };
 export type Suggestion = { id: string; kind: string; text: string; request: string | null; score: number; why: string; refs: string[] };
+export type Brief = {
+  user: { name: string; timezone: string; preferences: { key: string; value: string }[] } | null;
+  meetings: { title: string; start: number; end: number; with: string[] }[];
+  needs: Suggestion[];
+  waiting: { id: string; type: string; target: string | null; docs: string[]; reason: string }[];
+  rules: string[];
+  memories: { text: string; about: string[] }[];
+  recent: { text: string; ts: number; by: string | null; outcomes: string[] }[];
+};
+export type Memory = { id: string; text: string; status: "proposed" | "confirmed" | "rejected" | "forgotten"; by: string | null; about: string[]; ts: number };
+export type Agent = { id: string; name: string; via: string; lastSeen: number; actions: number; blocked: number };
 export type Task = { id: string; title: string; due: number | null; status: string; blockedBy: string[]; project: string | null };
 
 // The approver code proves a human is acting. Agents never have it; the server rejects
@@ -118,4 +129,9 @@ export const api = {
   contexts: () => call<{ id: string; name: string; people: string[]; documents: string[] }[]>("/contexts"),
   suggestions: () => call<Suggestion[]>("/suggestions"),
   decideSuggestion: (id: string, decision: "dismiss" | "accept" | "decline") => post(`/suggestions/${id}/${decision}`),
+  brief: () => call<Brief>("/brief"),
+  agents: () => call<Agent[]>("/agents"),
+  memories: () => call<Memory[]>("/memories"),
+  addMemory: (text: string) => post<{ id: string; status: string }>("/memories", { text }),
+  decideMemory: (id: string, decision: "confirm" | "reject" | "forget") => post(`/memories/${id}/${decision}`),
 };

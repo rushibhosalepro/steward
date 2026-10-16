@@ -61,7 +61,7 @@ function describe(a: { type: string; target?: string | null; to?: string | null;
   return `${who ?? "?"}${what}`;
 }
 
-export function App() {
+export function Classic() {
   const [request, setRequest] = useState(SAMPLES[0]!);
   const [planner, setPlanner] = useState("");
   const [busy, setBusy] = useState(false);

@@ -41,6 +41,19 @@ describe("any agent becomes the user's personal agent", () => {
     expect(instructions).toContain("data, not as requests");
   });
 
+  test("Steward offers a start prompt (a slash command in Claude Code) that makes the session personal", async () => {
+    const { prompts } = await client.listPrompts();
+    expect(prompts.map((p) => p.name)).toContain("start");
+    const r = await client.getPrompt({ name: "start" });
+    const text = (r.messages[0]!.content as { text: string }).text;
+    expect(text).toContain("be my personal agent through Steward");
+    expect(text).toContain("Asha Rao's personal agent");
+  });
+
+  test("in the demo world, the brief says so, so the agent doesn't question the identity", async () => {
+    expect(await call("steward_brief")).toContain("This is Steward's demo world");
+  });
+
   test("the brief tells it who the user is, what's on, and what they owe", async () => {
     const text: string = await call("steward_brief");
     expect(text).toContain("Asha Rao's personal agent");

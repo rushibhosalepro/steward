@@ -9,7 +9,7 @@ import { renderContext, retrieve, searchTerms } from "../retrieval/retrieve";
 import { computeContexts } from "../contexts/contexts";
 import { runScout } from "../scout/scout";
 import { check, type ProposedAction } from "../sentinel/sentinel";
-import { brief, ensureAgent, INSTRUCTIONS, proposeMemory, recordAgentTurn, renderBrief } from "../personal/personal";
+import { brief, ensureAgent, INSTRUCTIONS, proposeMemory, recordAgentTurn, renderBrief, startPrompt } from "../personal/personal";
 
 // Steward's graph, as tools any MCP client (Claude Desktop, Claude Code, another agent) can
 // select. Read tools expose graph queries and algorithms; write tools go through the Sentinel.
@@ -68,6 +68,11 @@ async function toProposed(g: Graph, a: ActionArgs): Promise<ProposedAction> {
 export function createMcpServer(userId: string, { guarded = true, agent = "MCP client" }: { guarded?: boolean; agent?: string } = {}) {
   const g = graphFor(userId);
   const server = new McpServer({ name: "steward", version: "0.2.0" }, { instructions: INSTRUCTIONS });
+
+  server.registerPrompt("start", {
+    title: "Be my personal agent",
+    description: "Switch this conversation into your personal agent, working only through Steward, starting from today's brief.",
+  }, async () => ({ messages: [{ role: "user" as const, content: { type: "text" as const, text: await startPrompt(g) } }] }));
 
   server.registerTool("steward_brief", {
     title: "Brief me on the user",

@@ -28,6 +28,7 @@ afterAll(async () => {
 test("the brief is about the visitor, not Asha", async () => {
   const text = renderBrief(await brief(graph));
   expect(text).toContain("You are Rushi B's personal agent");
+  expect(text).not.toContain("demo world");
   expect(text).toContain("no_meetings_before = 10:00");
 });
 

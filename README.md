@@ -40,19 +40,22 @@ to see the path in the graph, the checks and the Cypher. (The original dashboard
 | 4 | `Email Priya the Atlas pricing tiers and the discount floor` | **BLOCK** | The pricing sheet is restricted and only shared with Rahul. The planner never saw the figures (the context firewall keeps restricted facts out of the prompt), so it can't type them into the email either |
 | 5 | Look at **Needs you** on the right, and **Your worlds** on the left | Suggestions ranked by urgency and PageRank; Atlas, Orbit and Goa trip as separate worlds | `algo.pageRank` and `algo.WCC` over the same graph |
 
-**Plug in your own agent** (Claude Code shown; any MCP client works). Copy the command from
-**Connect your agent** in the sidebar (it points at your sandbox), or use the shared demo user:
+**Turn your own agent into your personal agent** (Claude Code shown; any MCP client works). Copy the
+commands from **Connect your agent** in the sidebar (they point at your sandbox), or use the shared
+demo user. A dedicated session gets Steward's tools and nothing else (no shell, no files):
 
 ```bash
-claude mcp add --transport http steward https://steward-production-8191.up.railway.app/api/users/demo/mcp
+claude --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{"steward":{"type":"http","url":"https://steward-production-8191.up.railway.app/api/users/demo/mcp"}}}'
 ```
 
-On connect, Steward tells the agent it is now your personal agent and to start with `steward_brief`.
-Ask it *"Good morning, what should I focus on today?"*, then *"Read my inbox and do what Alex
-asked."* Its actions appear in your Steward conversation under its own name; the Sentinel checks
-each one, and there is no approve tool, so ASK waits for you in Steward. It can propose memories
-(*"remember that I prefer short emails"*); they're used only after you confirm them. On the shared
-demo user, approving needs the approver code; in your sandbox, your browser is enough. To use real
+Then type `/mcp__steward__start`. Steward's start prompt switches the session into your personal agent
+and hands it today's brief: it opens with *"Hi Asha. Here's your brief…"*, what's coming up, the
+promise to Priya that's blocked by the metrics, and a warning about Alex's email. Ask it to do an
+errand and it proposes it through Steward: *"The email to Priya is **not sent yet**. Steward's
+Sentinel returned ASK… It's now in your approval inbox."* Its actions appear in your Steward
+conversation under its own name, there is no approve tool, and memories it proposes (*"remember
+that I prefer short emails"*) are used only after you confirm them. On the shared demo user,
+approving needs the approver code; in your sandbox, your browser is enough. To use real
 Gmail drafts, run it locally ([Run it](#run-it)): the approver code is printed at startup. More scenarios with expected results: [`eval/RESULTS.md`](eval/RESULTS.md).
 
 ---

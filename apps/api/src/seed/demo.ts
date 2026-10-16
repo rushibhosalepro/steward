@@ -27,7 +27,7 @@ export function demoWorld(now = Date.now()): { nodes: SeedNode[]; edges: SeedEdg
   const e = (from: string, type: string, to: string, props?: Props): SeedEdge => ({ from, type, to, props });
 
   const nodes: SeedNode[] = [
-    n("User", "u:asha", { name: "Asha Rao", email: "asha@example.com", timezone: "Asia/Kolkata" }),
+    n("User", "u:asha", { name: "Asha Rao", email: "asha@example.com", timezone: "Asia/Kolkata", demo: true }),
 
     // People
     n("Person", "p:priya", { name: "Priya Nair", email: "priya@northwind.example", org: "Northwind" }),

@@ -145,8 +145,11 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
   const [whyId, setWhyId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ActionDetail | null>(null);
   const [memoryText, setMemoryText] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const mcpUrl = `${window.location.origin}/api/users/${currentUser()}/mcp`;
+  const addCmd = `claude mcp add --transport http steward ${mcpUrl}`;
+  const dedicated = `claude --tools "" --strict-mcp-config --mcp-config '{"mcpServers":{"steward":{"type":"http","url":"${mcpUrl}"}}}'`;
+  const copy = (text: string, which: string) => { void navigator.clipboard?.writeText(text); setCopied(which); };
 
   const refresh = useCallback(async () => {
     const [b, a, ag, m, r] = await Promise.all([api.brief(), api.actions(), api.agents(), api.memories(), api.rules()]);
@@ -254,9 +257,14 @@ export function Workspace({ onStartOver }: { onStartOver: () => void }) {
         ))}
         <details className="ws-connect">
           <summary>+ Connect your agent</summary>
-          <p>Any MCP client becomes your personal agent: it gets your graph as memory and Steward's Sentinel as its limits.</p>
-          <code>claude mcp add --transport http steward {mcpUrl}</code>
-          <button className="ws-ghost" onClick={() => { void navigator.clipboard?.writeText(`claude mcp add --transport http steward ${mcpUrl}`); setCopied(true); }}>{copied ? "Copied" : "Copy"}</button>
+          <p>Any MCP agent becomes your personal agent: your graph is its memory, Steward's Sentinel is its limits.</p>
+          <p><b>A dedicated session</b> (Steward's tools only, no shell or files):</p>
+          <code>{dedicated}</code>
+          <button className="ws-ghost" onClick={() => copy(dedicated, "dedicated")}>{copied === "dedicated" ? "Copied" : "Copy"}</button>
+          <p><b>Or add it</b> to the Claude Code you already use:</p>
+          <code>{addCmd}</code>
+          <button className="ws-ghost" onClick={() => copy(addCmd, "add")}>{copied === "add" ? "Copied" : "Copy"}</button>
+          <p>Then type <code>/mcp__steward__start</code>: it switches the session into your personal agent, starting from today's brief.</p>
         </details>
         <div className="ws-sec">Connected</div>
         <div className="ws-agent"><span className={`ws-live ${google?.connected ? "" : "off"}`} />Gmail drafts &amp; Calendar{google?.connected ? "" : <small> · demo sandbox</small>}</div>

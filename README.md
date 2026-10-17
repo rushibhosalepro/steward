@@ -7,7 +7,7 @@ tricked into doing something you wouldn't allow.
 
 - **Try it:** https://steward-production-8191.up.railway.app (no login, no key)
 - **Built for:** Graph Hacks by WeMakeDevs × FalkorDB, Oct 15–18 2026
-- **Tracks:** Agent Memory and Coordination (main) · Agents That Act on Connected Data
+- **Tracks:** Agents That Act on Connected Data (main) · Company Brain
 - **Technical details** (graph model, Cypher, evidence): [docs/TECHNICAL.md](docs/TECHNICAL.md)
 
 ---

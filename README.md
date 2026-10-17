@@ -198,3 +198,5 @@ More commands, the evaluations and deployment: [docs/TECHNICAL.md](docs/TECHNICA
 
 **AI help:** built with Claude Code as a pair programmer; every result here was run and checked against
 a real FalkorDB. All demo data is made up.
+
+**License:** [MIT](LICENSE) © 2026 Rushikesh Bhosale.

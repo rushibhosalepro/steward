@@ -136,6 +136,11 @@ personal layer that turns any agent into your personal agent.
 
 ---
 
+## Submitted
+
+**Submitted Sat 17 Oct 2026** on the WeMakeDevs panel: tracks Agents That Act on Connected Data (primary)
+and Company Brain; repo, live demo and video linked. Editable until Sun 18 Oct, 23:59 IST.
+
 ## What's remaining
 
 **Me, before the freeze (Sat 09:30)**

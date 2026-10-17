@@ -18,8 +18,8 @@ tricked into doing something you wouldn't allow.
 AI assistants can now read your email and act for you. That's useful, but whoever writes to your inbox
 can now give your assistant orders.
 
-In 2025, a single email with hidden instructions made Microsoft 365 Copilot collect private data and
-send it out, without the user clicking anything ([EchoLeak, CVE-2025-32711](eval/THREATS.md#why-this-matters)).
+In 2025, security researchers showed that a single email with hidden instructions could make Microsoft
+365 Copilot collect private data and send it out, without the user clicking anything (since fixed) ([EchoLeak, CVE-2025-32711](eval/THREATS.md#why-this-matters)).
 The AI decided the email was a real request. **When the AI is the only one deciding, anyone can steer it.**
 
 ## The idea

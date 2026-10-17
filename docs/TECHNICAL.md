@@ -13,8 +13,9 @@ answer. Approvals become narrow, expiring, reversible rules, so it asks less ove
 getting looser. And because the same Sentinel sits behind an **MCP server**, any outside agent
 gets the same guarantees.
 
-**Why it matters:** in EchoLeak (CVE-2025-32711, CVSS 9.3) one email with hidden instructions got
-Microsoft 365 Copilot to collect internal data and send it out, with no click from the user. When
+**Why it matters:** in EchoLeak (CVE-2025-32711, CVSS 9.3, found by researchers and fixed) one
+email with hidden instructions could get Microsoft 365 Copilot to collect internal data and send it out,
+with no click from the user. When
 the model is the only thing deciding, whoever writes to your inbox is deciding too.
 
 - **Demo video:** https://youtu.be/bLvvK3SbfiU

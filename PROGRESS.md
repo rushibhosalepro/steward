@@ -2,7 +2,7 @@
 
 **Graph Hacks (WeMakeDevs × FalkorDB), Oct 15–18 2026** · status as of **Fri 16 Oct, 14:05 IST** ·
 93 commits · live at **https://steward-production-8191.up.railway.app** ·
-repo **https://github.com/rushibhosalepro/steward**
+repo **https://github.com/rushibhosalepro/steward** · video **https://youtu.be/bLvvK3SbfiU**
 
 > **Other agents ask the model if an action is safe. Steward asks the graph.**
 

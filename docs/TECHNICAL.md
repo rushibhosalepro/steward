@@ -17,6 +17,7 @@ gets the same guarantees.
 Microsoft 365 Copilot to collect internal data and send it out, with no click from the user. When
 the model is the only thing deciding, whoever writes to your inbox is deciding too.
 
+- **Demo video:** https://youtu.be/bLvvK3SbfiU
 - **Live demo:** https://steward-production-8191.up.railway.app (synthetic demo user, no login)
 - **Tracks:** **T1 Agents That Act on Connected Data** (primary) · **T3 Company Brain**
 - Graph Hacks (WeMakeDevs × FalkorDB), Oct 15–18 2026

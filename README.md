@@ -5,6 +5,7 @@
 Steward turns any AI agent into **your personal agent**, one that knows your world and can't be
 tricked into doing something you wouldn't allow.
 
+- **Watch the demo:** https://youtu.be/bLvvK3SbfiU
 - **Try it:** https://steward-production-8191.up.railway.app (no login, no key)
 - **Built for:** Graph Hacks by WeMakeDevs × FalkorDB, Oct 15–18 2026
 - **Tracks:** Agents That Act on Connected Data (main) · Company Brain
